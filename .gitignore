@@ -1,0 +1,6 @@
+.env
+*.secret
+data/
+mosquitto/passwd
+__pycache__/
+.venv/

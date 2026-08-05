@@ -1,0 +1,36 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "panels": [
+    {
+      "datasource": {"type": "influxdb", "uid": "aquaos-influx"},
+      "fieldConfig": {"defaults": {"unit": "fahrenheit"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 1,
+      "targets": [{"query": "from(bucket: v.defaultBucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"aquarium_sensor\" and r.sensor == \"temperature\" and r._field == \"value\")", "refId": "A"}],
+      "title": "Temperature", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "influxdb", "uid": "aquaos-influx"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 2,
+      "targets": [{"query": "from(bucket: v.defaultBucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"aquarium_sensor\" and r.sensor == \"ph\" and r._field == \"value\")", "refId": "A"}],
+      "title": "pH", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "influxdb", "uid": "aquaos-influx"},
+      "fieldConfig": {"defaults": {"unit": "none"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
+      "id": 3,
+      "targets": [{"query": "from(bucket: v.defaultBucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"aquarium_sensor\" and r.sensor == \"salinity\" and r._field == \"value\")", "refId": "A"}],
+      "title": "Salinity", "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["aquaos"],
+  "time": {"from": "now-6h", "to": "now"},
+  "title": "AquaOS Overview",
+  "uid": "aquaos-overview",
+  "version": 1
+}

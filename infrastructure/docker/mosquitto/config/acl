@@ -1,0 +1,8 @@
+# Create named users and replace this starter ACL before deploying.
+user reefpi
+topic readwrite aquaos/home/reef/#
+
+user services
+topic read aquaos/#
+topic write aquaos/home/reef/command/#
+topic write aquaos/home/reef/analysis/#
