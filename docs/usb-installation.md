@@ -9,8 +9,16 @@ with a web browser. Installing erases the disk you select.
 
 ## Make the USB drive
 
-1. Download `aquaos-VERSION-amd64.iso` and its `.sha256` file from the AquaOS
-   release.
+For the current pre-release test image, open the repository's **Actions** tab,
+select **Build appliance ISO**, open the latest successful run, and download the
+`aquaos-test-iso` artifact. GitHub packages the ISO and verification files in a
+ZIP archive. This image uses a per-build development signing key and is only for
+installation and simulator testing.
+
+Once a hardware-validated production release exists, download
+`aquaos-VERSION-amd64.iso` and its `.sha256` file from the AquaOS release instead.
+
+1. Extract the downloaded artifact.
 2. Verify the checksum with your operating system's checksum tool.
 3. Write the ISO to the USB drive with Raspberry Pi Imager, balenaEtcher, or
    another image writer. Select the AquaOS ISO as a custom image.

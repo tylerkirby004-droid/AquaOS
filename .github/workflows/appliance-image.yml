@@ -1,0 +1,69 @@
+name: Build appliance ISO
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/appliance-image.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      AQUAOS_VERSION: dev-${{ github.run_number }}-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install Debian image tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends live-build debootstrap
+      - name: Create isolated development signing identity
+        run: |
+          umask 077
+          mkdir -p dist/signing dist/signed-release
+          openssl genpkey -algorithm ED25519 -out dist/signing/development-private.pem
+          openssl pkey -in dist/signing/development-private.pem -pubout -outform DER \
+            | tail -c 32 | od -An -vtx1 | tr -d ' \n' \
+            > dist/signing/development-public.hex
+      - name: Build signed AquaOS payload
+        env:
+          AQUAOS_SIGNING_KEY: dist/signing/development-private.pem
+          AQUAOS_PUBLIC_KEY_HEX_FILE: dist/signing/development-public.hex
+        run: ./scripts/build-signed-release.sh dist/signed-release
+      - name: Build hybrid USB installer ISO
+        run: |
+          sudo env "PATH=$PATH" "AQUAOS_VERSION=$AQUAOS_VERSION" \
+            ./scripts/build-appliance-image.sh dist/signed-release dist/image
+      - name: Sign and label test image
+        run: |
+          image=$(find dist/image -maxdepth 1 -type f -name '*.iso' -print -quit)
+          test -n "$image"
+          digest=$(sha256sum "$image" | awk '{print $1}')
+          printf '%s' "$digest" \
+            | openssl pkeyutl -sign -rawin -inkey dist/signing/development-private.pem \
+            > "$image.sig"
+          od -An -vtx1 "$image.sig" | tr -d ' \n' > "$image.sig.hex"
+          cp dist/signing/development-public.hex dist/image/aquaos-development-public-key.hex
+          printf '%s\n' \
+            'UNVALIDATED AQUAOS TEST IMAGE' \
+            'This image uses a per-build development key.' \
+            'Use only for installation and simulator testing.' \
+            'Do not connect live aquarium equipment.' \
+            > dist/image/READ-BEFORE-USING.txt
+      - name: Upload downloadable ISO
+        uses: actions/upload-artifact@v6
+        with:
+          name: aquaos-test-iso-${{ github.run_number }}
+          path: dist/image/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
