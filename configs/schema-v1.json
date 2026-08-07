@@ -208,6 +208,7 @@
         "capabilities": { "type": "array", "uniqueItems": true, "items": { "enum": ["observe", "switch", "variable-output", "command-acknowledgement", "reported-state", "power-telemetry"] } },
         "hazardous": { "type": "boolean" }, "fail_safe_on": { "type": "boolean" },
         "maximum_on": { "type": "string" }, "maximum_daily_on": { "type": "string" }, "minimum_off": { "type": "string" },
+        "required_sensor_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
         "commissioning": { "$ref": "#/$defs/commissioning" }
       }
     },

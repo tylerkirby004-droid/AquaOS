@@ -38,26 +38,27 @@ import (
 
 // Container owns the concrete object graph constructed during bootstrap.
 type Container struct {
-	Sensors       sensors.SensorRegistry
-	Equipment     equipment.EquipmentRegistry
-	Alarms        alarms.AlarmManager
-	Devices       devices.DeviceRegistry
-	State         state.StateManager
-	Configuration config.ConfigurationManager
-	MQTT          mqtt.MQTTClient
-	Storage       storage.Storage
-	API           api.API
-	Health        *health.Manager
-	Events        *events.Bus
-	Safety        *safety.Engine
-	Output        *output.Service
-	OutputRouter  *output.ExecutorRouter
-	Lifecycle     *lifecycle.Manager
-	Simulator     health.Component
-	Shelly        *shelly.Adapter
-	ESP32         *esp32.Adapter
-	Bench         *bench.Coordinator
-	HomeAssistant *homeassistant.Manager
+	Sensors        sensors.SensorRegistry
+	Equipment      equipment.EquipmentRegistry
+	Alarms         alarms.AlarmManager
+	AlarmEvaluator *alarms.Evaluator
+	Devices        devices.DeviceRegistry
+	State          state.StateManager
+	Configuration  config.ConfigurationManager
+	MQTT           mqtt.MQTTClient
+	Storage        storage.Storage
+	API            api.API
+	Health         *health.Manager
+	Events         *events.Bus
+	Safety         *safety.Engine
+	Output         *output.Service
+	OutputRouter   *output.ExecutorRouter
+	Lifecycle      *lifecycle.Manager
+	Simulator      health.Component
+	Shelly         *shelly.Adapter
+	ESP32          *esp32.Adapter
+	Bench          *bench.Coordinator
+	HomeAssistant  *homeassistant.Manager
 }
 
 // Option customizes composition-root infrastructure without introducing globals.
@@ -100,19 +101,48 @@ func New(cfg config.Config, configPath string, logger *slog.Logger, supplied ...
 	}
 	stateManager := state.NewManager(eventBus)
 	alarmManager := alarms.NewManager(eventBus, logger.With("component", "alarms"))
+	thresholdRules, err := configuredThresholdRules(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("construct configured alarm rules: %w", err)
+	}
+	alarmEvaluator, err := alarms.NewEvaluator(eventBus, alarmManager, thresholdRules)
+	if err != nil {
+		return nil, fmt.Errorf("construct alarm evaluator: %w", err)
+	}
 	profiles := make([]equipment.Profile, 0, len(cfg.Adapters.Shelly.Endpoints))
+	equipmentDefinitions := make(map[string]config.Equipment, len(cfg.Inventory.Equipment))
+	sensorDefinitions := make(map[string]config.Sensor, len(cfg.Inventory.Sensors))
+	for _, definition := range cfg.Inventory.Equipment {
+		equipmentDefinitions[definition.EntityID] = definition
+	}
+	for _, definition := range cfg.Inventory.Sensors {
+		sensorDefinitions[definition.ID] = definition
+	}
 	if cfg.Adapters.Shelly.Enabled {
 		for _, endpoint := range cfg.Adapters.Shelly.Endpoints {
 			kind := equipment.KindOutlet
 			hazardous := false
-			if endpoint.EquipmentKind == "heater" {
+			limits := equipment.Limits{MaximumOn: endpoint.MaximumOn}
+			definition, configuredDefinition := equipmentDefinitions[endpoint.EquipmentID]
+			if configuredDefinition && definition.Kind != "" {
+				kind = equipment.Kind(definition.Kind)
+				hazardous = definition.Hazardous
+				limits = equipment.Limits{MaximumOn: definition.MaximumOn, MaximumDailyOn: definition.MaximumDaily, MinimumOff: definition.MinimumOff}
+			} else if endpoint.EquipmentKind == "heater" {
 				kind, hazardous = equipment.KindHeater, true
 			}
-			requiredInputs := make([]equipment.InputRequirement, 0, len(endpoint.RequiredProbeIDs))
-			for _, probeID := range endpoint.RequiredProbeIDs {
+			requiredProbeIDs := append([]string(nil), endpoint.RequiredProbeIDs...)
+			if configuredDefinition && len(definition.RequiredSensorIDs) > 0 {
+				requiredProbeIDs = requiredProbeIDs[:0]
+				for _, sensorID := range definition.RequiredSensorIDs {
+					requiredProbeIDs = append(requiredProbeIDs, sensorDefinitions[sensorID].EntityID)
+				}
+			}
+			requiredInputs := make([]equipment.InputRequirement, 0, len(requiredProbeIDs))
+			for _, probeID := range requiredProbeIDs {
 				requiredInputs = append(requiredInputs, equipment.InputRequirement{Key: state.Key{EntityKind: state.EntitySensor, EntityID: domain.EntityID(probeID), Plane: state.PlaneObservation, Attribute: "measurement"}})
 			}
-			profiles = append(profiles, equipment.Profile{EquipmentID: domain.EquipmentID(endpoint.EquipmentID), Kind: kind, Hazardous: hazardous, FailSafeOn: endpoint.SafeOn, Capabilities: []domain.Capability{domain.CapabilitySwitch, domain.CapabilityCommandAcknowledgement, domain.CapabilityReportedState, domain.CapabilityPowerTelemetry}, Limits: equipment.Limits{MaximumOn: endpoint.MaximumOn}, RequiredInputs: requiredInputs})
+			profiles = append(profiles, equipment.Profile{EquipmentID: domain.EquipmentID(endpoint.EquipmentID), Kind: kind, Hazardous: hazardous, FailSafeOn: endpoint.SafeOn, Capabilities: []domain.Capability{domain.CapabilitySwitch, domain.CapabilityCommandAcknowledgement, domain.CapabilityReportedState, domain.CapabilityPowerTelemetry}, Limits: limits, RequiredInputs: requiredInputs})
 		}
 	}
 	safetyEngine, err := safety.NewEngine(stateManager, logger.With("component", "safety"), time.Now, profiles...)
@@ -217,7 +247,7 @@ func New(cfg config.Config, configPath string, logger *slog.Logger, supplied ...
 		}
 	}
 
-	monitored := []health.Component{eventBus, configurationManager, deviceRegistry, sensorManager, equipmentManager, stateManager, safetyEngine, outputService, alarmManager, storageManager}
+	monitored := []health.Component{eventBus, configurationManager, deviceRegistry, sensorManager, equipmentManager, stateManager, safetyEngine, outputService, alarmManager, alarmEvaluator, storageManager}
 	var mqttClient mqtt.MQTTClient
 	var mqttConcrete *mqtt.Client
 	var homeAssistant *homeassistant.Manager
@@ -276,7 +306,7 @@ func New(cfg config.Config, configPath string, logger *slog.Logger, supplied ...
 	}
 
 	return &Container{
-		Sensors: sensorManager, Equipment: equipmentManager, Alarms: alarmManager,
+		Sensors: sensorManager, Equipment: equipmentManager, Alarms: alarmManager, AlarmEvaluator: alarmEvaluator,
 		Devices: deviceRegistry, State: stateManager, Configuration: configurationManager, MQTT: mqttClient,
 		Storage: storageManager, API: apiServer, Health: healthManager, Events: eventBus, Safety: safetyEngine, Output: outputService,
 		OutputRouter: outputRouter,
@@ -285,6 +315,26 @@ func New(cfg config.Config, configPath string, logger *slog.Logger, supplied ...
 		}, components...), Simulator: simulatorAdapter,
 		Shelly: shellyAdapter, ESP32: esp32Adapter, Bench: benchCoordinator, HomeAssistant: homeAssistant,
 	}, nil
+}
+
+func configuredThresholdRules(cfg config.Config) ([]alarms.ThresholdRule, error) {
+	sensorsByID := make(map[string]config.Sensor, len(cfg.Inventory.Sensors))
+	for _, sensor := range cfg.Inventory.Sensors {
+		sensorsByID[sensor.ID] = sensor
+	}
+	result := make([]alarms.ThresholdRule, 0, len(cfg.Alarms.Rules))
+	for _, configured := range cfg.Alarms.Rules {
+		sensor := sensorsByID[configured.SensorID]
+		if sensor.EntityID == "" {
+			return nil, fmt.Errorf("alarm %s sensor %s has no runtime entity_id", configured.ID, configured.SensorID)
+		}
+		scale, offset := 1.0, 0.0
+		if sensor.Calibration.Enabled {
+			scale, offset = sensor.Calibration.Scale, sensor.Calibration.Offset
+		}
+		result = append(result, alarms.ThresholdRule{ID: configured.ID, Name: configured.Name, SensorID: domain.SensorID(sensor.EntityID), Condition: configured.Condition, Threshold: configured.Threshold, ThresholdHigh: configured.ThresholdHigh, Severity: events.Severity(configured.Severity), Delay: configured.Delay, ClearDelay: configured.ClearDelay, Latching: configured.Latching, Scale: scale, Offset: offset})
+	}
+	return result, nil
 }
 
 // registerAdapterInventory creates REST and discovery identities from validated

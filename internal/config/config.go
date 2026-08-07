@@ -220,18 +220,19 @@ type Sensor struct {
 
 // Equipment declares a generic output identity and its owning device.
 type Equipment struct {
-	ID            string              `yaml:"id" json:"id"`
-	EntityID      string              `yaml:"entity_id,omitempty" json:"entityId,omitempty"`
-	DeviceID      string              `yaml:"device_id" json:"deviceId"`
-	Name          string              `yaml:"name,omitempty" json:"name,omitempty"`
-	Kind          string              `yaml:"kind,omitempty" json:"kind,omitempty"`
-	Capabilities  []domain.Capability `yaml:"capabilities,omitempty" json:"capabilities,omitempty"`
-	Hazardous     bool                `yaml:"hazardous,omitempty" json:"hazardous"`
-	FailSafeOn    bool                `yaml:"fail_safe_on,omitempty" json:"failSafeOn"`
-	MaximumOn     time.Duration       `yaml:"maximum_on,omitempty" json:"maximumOn"`
-	MaximumDaily  time.Duration       `yaml:"maximum_daily_on,omitempty" json:"maximumDailyOn"`
-	MinimumOff    time.Duration       `yaml:"minimum_off,omitempty" json:"minimumOff"`
-	Commissioning Commissioning       `yaml:"commissioning,omitempty" json:"commissioning"`
+	ID                string              `yaml:"id" json:"id"`
+	EntityID          string              `yaml:"entity_id,omitempty" json:"entityId,omitempty"`
+	DeviceID          string              `yaml:"device_id" json:"deviceId"`
+	Name              string              `yaml:"name,omitempty" json:"name,omitempty"`
+	Kind              string              `yaml:"kind,omitempty" json:"kind,omitempty"`
+	Capabilities      []domain.Capability `yaml:"capabilities,omitempty" json:"capabilities,omitempty"`
+	Hazardous         bool                `yaml:"hazardous,omitempty" json:"hazardous"`
+	FailSafeOn        bool                `yaml:"fail_safe_on,omitempty" json:"failSafeOn"`
+	MaximumOn         time.Duration       `yaml:"maximum_on,omitempty" json:"maximumOn"`
+	MaximumDaily      time.Duration       `yaml:"maximum_daily_on,omitempty" json:"maximumDailyOn"`
+	MinimumOff        time.Duration       `yaml:"minimum_off,omitempty" json:"minimumOff"`
+	RequiredSensorIDs []string            `yaml:"required_sensor_ids,omitempty" json:"requiredSensorIds,omitempty"`
+	Commissioning     Commissioning       `yaml:"commissioning,omitempty" json:"commissioning"`
 }
 
 // Calibration applies a documented linear correction after raw validation.
@@ -688,6 +689,7 @@ func (i Inventory) validate() error {
 		}
 	}
 	seen := make(map[string]string, len(i.Sensors)+len(i.Equipment))
+	sensorIDs := make(map[string]struct{}, len(i.Sensors))
 	for index, sensor := range i.Sensors {
 		base := fmt.Sprintf("inventory.sensors[%d]", index)
 		if err := validateID(base+".id", sensor.ID); err != nil {
@@ -697,6 +699,7 @@ func (i Inventory) validate() error {
 			return validationError(base+".id", "duplicate_id", "duplicates "+previous)
 		}
 		seen[sensor.ID] = base + ".id"
+		sensorIDs[sensor.ID] = struct{}{}
 		if sensor.EntityID != "" {
 			if err := validateUUID(base+".entity_id", sensor.EntityID); err != nil {
 				return err
@@ -758,8 +761,13 @@ func (i Inventory) validate() error {
 			return validationError(base+".maximum_daily_on", "out_of_range", "must be at least maximum_on")
 		}
 		hazardousKind := oneOf(equipment.Kind, "heater", "dosing-pump", "ato")
-		if hazardousKind && (!equipment.Hazardous || equipment.FailSafeOn || equipment.MaximumOn <= 0) {
-			return validationError(base, "unsafe_equipment", "heater, dosing-pump, and ATO equipment must be hazardous, fail safe off, and have a positive maximum_on")
+		if hazardousKind && (!equipment.Hazardous || equipment.FailSafeOn || equipment.MaximumOn <= 0 || len(equipment.RequiredSensorIDs) == 0) {
+			return validationError(base, "unsafe_equipment", "heater, dosing-pump, and ATO equipment must be hazardous, fail safe off, have a positive maximum_on, and require safety sensors")
+		}
+		for _, sensorID := range equipment.RequiredSensorIDs {
+			if _, exists := sensorIDs[sensorID]; !exists {
+				return validationError(base+".required_sensor_ids", "invalid_reference", "references unknown sensor "+sensorID)
+			}
 		}
 		if equipment.Kind == "dosing-pump" && equipment.MaximumDaily <= 0 {
 			return validationError(base+".maximum_daily_on", "required", "is required for dosing equipment")
@@ -792,9 +800,9 @@ func (c Commissioning) validate(path string, hazardous bool) error {
 }
 
 func (a AlarmConfig) validate(inventory Inventory) error {
-	sensors := make(map[string]struct{}, len(inventory.Sensors))
+	sensors := make(map[string]string, len(inventory.Sensors))
 	for _, sensor := range inventory.Sensors {
-		sensors[sensor.ID] = struct{}{}
+		sensors[sensor.ID] = sensor.EntityID
 	}
 	seen := make(map[string]struct{}, len(a.Rules))
 	for index, rule := range a.Rules {
@@ -806,8 +814,12 @@ func (a AlarmConfig) validate(inventory Inventory) error {
 			return validationError(base+".id", "duplicate_id", "alarm rule ID is duplicated")
 		}
 		seen[rule.ID] = struct{}{}
-		if _, exists := sensors[rule.SensorID]; !exists {
+		entityID, exists := sensors[rule.SensorID]
+		if !exists {
 			return validationError(base+".sensor_id", "invalid_reference", "references unknown sensor "+rule.SensorID)
+		}
+		if entityID == "" {
+			return validationError(base+".sensor_id", "runtime_identity_required", "referenced sensor requires entity_id")
 		}
 		if strings.TrimSpace(rule.Name) == "" {
 			return validationError(base+".name", "required", "is required")
@@ -910,6 +922,7 @@ func (c Config) Clone() Config {
 	cloned.Inventory.Equipment = append([]Equipment(nil), c.Inventory.Equipment...)
 	for index := range cloned.Inventory.Equipment {
 		cloned.Inventory.Equipment[index].Capabilities = append([]domain.Capability(nil), c.Inventory.Equipment[index].Capabilities...)
+		cloned.Inventory.Equipment[index].RequiredSensorIDs = append([]string(nil), c.Inventory.Equipment[index].RequiredSensorIDs...)
 	}
 	cloned.Alarms.Rules = append([]AlarmRule(nil), c.Alarms.Rules...)
 	for index := range cloned.Alarms.Rules {

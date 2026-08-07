@@ -8,6 +8,8 @@ const notice = byId('notice');
 let editable = null;
 let validatedDigest = '';
 let discovered = [];
+let editingEquipmentID = '';
+let editingAlarmID = '';
 
 function normalizeConfiguration() {
   const config = editable.configuration;
@@ -29,6 +31,14 @@ function duration(value, optional = true) {
   if (!match) throw new Error('Use a duration such as 30s, 5m, or 2h.');
   const factors = {ms: 1e6, s: 1e9, m: 60e9, h: 3600e9};
   return Number(match[1]) * factors[match[2]];
+}
+
+function durationText(value) {
+  const nanoseconds = Number(value || 0);
+  if (!nanoseconds) return '';
+  if (nanoseconds % 3600e9 === 0) return `${nanoseconds / 3600e9}h`;
+  if (nanoseconds % 60e9 === 0) return `${nanoseconds / 60e9}m`;
+  return `${nanoseconds / 1e9}s`;
 }
 
 function notify(message) {
@@ -127,7 +137,7 @@ function renderInventory() {
 
 function renderAlarms() {
   const rules = editable.configuration.alarms.rules;
-  byId('alarmList').innerHTML = rules.length ? rules.map(rule => `<div class="inventory-row"><span class="tag">${escapeHTML(rule.severity)}</span><strong>${escapeHTML(rule.name)}</strong><span>${escapeHTML(rule.sensorId)} ${escapeHTML(rule.condition)} ${rule.threshold}</span><button data-remove-alarm="${escapeHTML(rule.id)}">Remove</button></div>`).join('') : '<p class="empty">No alarm rules configured.</p>';
+  byId('alarmList').innerHTML = rules.length ? rules.map(rule => `<div class="inventory-row"><span class="tag">${escapeHTML(rule.severity)}</span><strong>${escapeHTML(rule.name)}</strong><span>${escapeHTML(rule.sensorId)} ${escapeHTML(rule.condition)} ${rule.threshold}</span><div class="row-actions"><button data-edit-alarm="${escapeHTML(rule.id)}">Edit</button><button data-remove-alarm="${escapeHTML(rule.id)}">Remove</button></div></div>`).join('') : '<p class="empty">No alarm rules configured.</p>';
 }
 
 function addInventory(kind, value) {
@@ -210,20 +220,21 @@ function mapDiscovery(item) {
 
 byId('deviceForm').addEventListener('submit', event => { event.preventDefault(); try { addInventory('devices', {id: byId('deviceId').value}); event.target.reset(); } catch (error) { notify(error.message); } });
 byId('sensorForm').addEventListener('submit', event => { event.preventDefault(); try { const calibrated = byId('calibrationEnabled').checked; addInventory('sensors', {id: byId('sensorId').value, entityId: crypto.randomUUID(), name: byId('sensorName').value.trim(), deviceId: byId('sensorDevice').value, quantity: byId('sensorUnit').value === 'boolean' ? 'boolean' : 'measurement', unit: byId('sensorUnit').value, calibration: {enabled: calibrated, scale: Number(byId('calibrationScale').value), offset: Number(byId('calibrationOffset').value), reference: calibrated ? byId('calibrationReference').value.trim() : '', calibratedBy: calibrated ? 'admin-gui-operator' : '', calibratedAt: calibrated ? new Date().toISOString() : '0001-01-01T00:00:00Z'}}); event.target.reset(); renderAlarms(); } catch (error) { notify(error.message); } });
-byId('equipmentForm').addEventListener('submit', event => { event.preventDefault(); try { const kind = byId('equipmentKind').value; const hazardous = ['heater', 'ato', 'dosing-pump'].includes(kind); addInventory('equipment', {id: byId('equipmentId').value, entityId: crypto.randomUUID(), name: byId('equipmentName').value.trim(), deviceId: byId('equipmentDevice').value, kind, capabilities: ['switch', 'command-acknowledgement', 'reported-state'], hazardous, failSafeOn: false, maximumOn: duration(byId('maximumOn').value, !hazardous), maximumDailyOn: duration(byId('maximumDaily').value, kind !== 'dosing-pump'), minimumOff: duration(byId('minimumOff').value), commissioning: {stage: 'uncommissioned'}}); event.target.reset(); } catch (error) { notify(error.message); } });
+byId('equipmentForm').addEventListener('submit', event => { event.preventDefault(); try { const kind = byId('equipmentKind').value; const hazardous = ['heater', 'ato', 'dosing-pump'].includes(kind); const requiredSensorIds = byId('requiredSensors').value.split(',').map(value => value.trim()).filter(Boolean); const existing = editingEquipmentID ? editable.configuration.inventory.equipment.find(value => value.id === editingEquipmentID) : null; const value = {id: byId('equipmentId').value.trim(), entityId: existing?.entityId || crypto.randomUUID(), name: byId('equipmentName').value.trim(), deviceId: byId('equipmentDevice').value, kind, capabilities: ['switch', 'command-acknowledgement', 'reported-state'], hazardous, failSafeOn: false, maximumOn: duration(byId('maximumOn').value, !hazardous), maximumDailyOn: duration(byId('maximumDaily').value, kind !== 'dosing-pump'), minimumOff: duration(byId('minimumOff').value), requiredSensorIds, commissioning: existing?.commissioning || {stage: 'uncommissioned'}}; if (existing) { const index = editable.configuration.inventory.equipment.indexOf(existing); editable.configuration.inventory.equipment[index] = value; const endpoint = editable.configuration.adapters.shelly.endpoints.find(item => item.equipmentId === value.entityId); if (endpoint) { endpoint.equipmentKind = kind === 'heater' ? 'heater' : 'outlet'; endpoint.maximumOn = value.maximumOn; endpoint.requiredProbeIds = requiredSensorIds.map(sensorID => editable.configuration.inventory.sensors.find(sensor => sensor.id === sensorID)?.entityId).filter(Boolean); } editingEquipmentID = ''; event.submitter.textContent = 'Add equipment'; renderInventory(); markChanged(); } else { addInventory('equipment', value); } event.target.reset(); } catch (error) { notify(error.message); } });
 byId('checkInventory').addEventListener('click', async () => { try { await validateCandidate(); showView('safety'); } catch (error) { notify(error.message); } });
 
 byId('alarmForm').addEventListener('submit', event => {
   event.preventDefault();
   try {
     const id = byId('alarmId').value.trim();
-    if (!validShortID(id) || editable.configuration.alarms.rules.some(rule => rule.id === id)) throw new Error('Choose a unique lowercase alarm ID.');
+    if (!validShortID(id) || editable.configuration.alarms.rules.some(rule => rule.id === id && rule.id !== editingAlarmID)) throw new Error('Choose a unique lowercase alarm ID.');
     const condition = byId('alarmCondition').value;
     const highText = byId('alarmThresholdHigh').value.trim();
     const notifications = [];
     if (byId('notifyHA').checked) notifications.push('home-assistant');
     if (byId('notifyLog').checked) notifications.push('log');
-    editable.configuration.alarms.rules.push({id, name: byId('alarmName').value.trim(), sensorId: byId('alarmSensor').value, condition, threshold: Number(byId('alarmThreshold').value), ...(condition === 'outside' ? {thresholdHigh: Number(highText)} : {}), severity: byId('alarmSeverity').value, delay: duration(byId('alarmDelay').value, false), clearDelay: duration(byId('alarmClearDelay').value, false), latching: byId('alarmLatching').checked, notifications});
+    const value = {id, name: byId('alarmName').value.trim(), sensorId: byId('alarmSensor').value, condition, threshold: Number(byId('alarmThreshold').value), ...(condition === 'outside' ? {thresholdHigh: Number(highText)} : {}), severity: byId('alarmSeverity').value, delay: duration(byId('alarmDelay').value, false), clearDelay: duration(byId('alarmClearDelay').value, false), latching: byId('alarmLatching').checked, notifications};
+    if (editingAlarmID) { const index = editable.configuration.alarms.rules.findIndex(rule => rule.id === editingAlarmID); editable.configuration.alarms.rules[index] = value; editingAlarmID = ''; } else editable.configuration.alarms.rules.push(value);
     renderAlarms();
     markChanged();
     event.target.reset();
@@ -241,9 +252,31 @@ document.addEventListener('click', event => {
     editable.configuration.alarms.rules = editable.configuration.alarms.rules.filter(rule => rule.id !== alarmID);
     renderAlarms(); markChanged(); return;
   }
+  const editAlarmID = event.target.dataset.editAlarm;
+  if (editAlarmID) {
+    const rule = editable.configuration.alarms.rules.find(value => value.id === editAlarmID);
+    editingAlarmID = editAlarmID;
+    byId('alarmId').value = rule.id; byId('alarmName').value = rule.name; byId('alarmSensor').value = rule.sensorId; byId('alarmCondition').value = rule.condition; byId('alarmThreshold').value = rule.threshold; byId('alarmThresholdHigh').value = rule.thresholdHigh ?? ''; byId('alarmSeverity').value = rule.severity; byId('alarmDelay').value = durationText(rule.delay); byId('alarmClearDelay').value = durationText(rule.clearDelay); byId('alarmLatching').checked = rule.latching; byId('notifyHA').checked = rule.notifications.includes('home-assistant'); byId('notifyLog').checked = rule.notifications.includes('log');
+    notify('Edit the alarm form and save it.'); return;
+  }
   const editID = event.target.dataset.editId;
   if (editID) {
     const kind = event.target.dataset.editKind;
+    if (kind === 'equipment') {
+      const item = editable.configuration.inventory.equipment.find(value => value.id === editID);
+      editingEquipmentID = editID;
+      byId('equipmentId').value = item.id;
+      byId('equipmentName').value = item.name || item.id;
+      byId('equipmentDevice').value = item.deviceId;
+      byId('equipmentKind').value = item.kind || 'outlet';
+      byId('requiredSensors').value = (item.requiredSensorIds || []).join(', ');
+      byId('maximumOn').value = durationText(item.maximumOn);
+      byId('maximumDaily').value = durationText(item.maximumDailyOn);
+      byId('minimumOff').value = durationText(item.minimumOff);
+      byId('equipmentForm').querySelector('button[type="submit"],button:last-child').textContent = 'Save equipment';
+      notify('Edit the equipment form and choose Save equipment.');
+      return;
+    }
     const collection = kind === 'device' ? 'devices' : kind === 'sensor' ? 'sensors' : 'equipment';
     const item = editable.configuration.inventory[collection].find(value => value.id === editID);
     const name = window.prompt('Display name', item.name || item.id);
@@ -309,6 +342,17 @@ byId('saveBackup').addEventListener('click', async () => {
 
 async function validateCandidate() {
   if (!editable) throw new Error('Connect to AquaOS first.');
+  if (byId('activateHardware').checked) {
+    const config = editable.configuration;
+    const equipmentByEntity = new Map(config.inventory.equipment.map(item => [item.entityId, item]));
+    const uncommissioned = config.adapters.shelly.endpoints.filter(endpoint => equipmentByEntity.get(endpoint.equipmentId)?.commissioning?.stage !== 'commissioned');
+    if (uncommissioned.length) throw new Error('Every mapped Shelly outlet must be commissioned before hardware activation.');
+    config.simulator.enabled = false;
+    config.bench.enabled = true;
+    config.bench.safeLoadAcknowledged = true;
+    config.adapters.shelly.enabled = config.adapters.shelly.endpoints.length > 0;
+    config.adapters.esp32.enabled = config.adapters.esp32.endpoints.length > 0;
+  }
   const response = await call('/api/config/editable/validate', {method: 'POST', body: JSON.stringify(editable)});
   const validation = await response.json();
   validatedDigest = validation.digest;

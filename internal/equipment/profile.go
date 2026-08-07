@@ -19,6 +19,7 @@ const (
 	KindCirculationPump Kind = "circulation-pump"
 	KindATO             Kind = "ato"
 	KindDosingPump      Kind = "dosing-pump"
+	KindLight           Kind = "light"
 )
 
 // InputRequirement declares canonical state required before hazardous activation.
@@ -58,7 +59,7 @@ func (p Profile) Validate() error {
 		return errors.New("controlled equipment requires switch, acknowledgement, and reported-state capabilities")
 	}
 	switch p.Kind {
-	case KindOutlet, KindReturnPump, KindCirculationPump:
+	case KindOutlet, KindReturnPump, KindCirculationPump, KindLight:
 	case KindHeater, KindATO, KindDosingPump:
 		if !p.Hazardous {
 			return errors.New("heater, ATO, and dosing profiles must be hazardous")
