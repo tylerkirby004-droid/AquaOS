@@ -181,7 +181,7 @@ byId('saveServices').addEventListener('click', async () => {
 byId('discoveryForm').addEventListener('submit', async event => {
   event.preventDefault();
   try {
-    const candidate = {kind: byId('discoveryKind').value, baseUrl: byId('discoveryUrl').value.trim(), channel: Number(byId('discoveryChannel').value)};
+    const candidate = {kind: byId('discoveryKind').value, baseUrl: byId('discoveryUrl').value.trim(), channel: Number(byId('discoveryChannel').value), bearerTokenFile: byId('discoveryTokenFile').value.trim()};
     discovered = await (await call('/api/discovery/probe', {method: 'POST', body: JSON.stringify({candidates: [candidate]})})).json();
     byId('discoveryResults').innerHTML = discovered.map((item, index) => `<div class="inventory-row"><span class="tag">${escapeHTML(item.kind)}</span><strong>${escapeHTML(item.identity || item.baseUrl)}</strong><span>${escapeHTML(item.reachable ? item.message || 'Ready to map' : item.message || 'Not reachable')}</span>${item.reachable ? `<button data-map-discovery="${index}">Add to AquaOS</button>` : ''}</div>`).join('');
   } catch (error) { notify(error.message); }
@@ -210,7 +210,7 @@ function mapDiscovery(item) {
     item.probeIds.forEach(id => { if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) throw new Error('ESP32 probe identities must be UUIDs.'); });
     config.inventory.devices.push({id: key, entityId: deviceEntityID, name: item.identity || 'ESP32 sensor node', manufacturer: 'AquaOS', firmware: item.firmware || '', metadata: {adapter: 'esp32'}});
     item.probeIds.forEach((entityId, index) => config.inventory.sensors.push({id: `${key}-probe-${index + 1}`, entityId, deviceId: key, name: `Temperature probe ${index + 1}`, quantity: 'temperature', unit: 'celsius', calibration: {enabled: false, scale: 1, offset: 0}}));
-    config.adapters.esp32.endpoints.push({id: endpointID, deviceId: deviceEntityID, alarmRuleId: crypto.randomUUID(), baseUrl: item.baseUrl, bearerTokenFile: '', probeIds: item.probeIds, pollInterval: 5e9, requestTimeout: 2e9, freshFor: 15e9, maximumClockSkew: 5e9, maximumDifferenceCelsius: 1});
+    config.adapters.esp32.endpoints.push({id: endpointID, deviceId: deviceEntityID, alarmRuleId: crypto.randomUUID(), baseUrl: item.baseUrl, bearerTokenFile: item.bearerTokenFile || '', probeIds: item.probeIds, pollInterval: 5e9, requestTimeout: 2e9, freshFor: 15e9, maximumClockSkew: 5e9, maximumDifferenceCelsius: 1});
   }
   renderInventory();
   markChanged();

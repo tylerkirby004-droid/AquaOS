@@ -53,3 +53,22 @@ func TestProbeBoundsAndRedactsTransportErrors(t *testing.T) {
 		t.Fatal("unbounded candidate set was accepted")
 	}
 }
+
+func TestESP32CredentialFileIsRestrictedAndResolved(t *testing.T) {
+	service, err := New(fakeShelly{}, fakeESP32{}, 1, time.Second, func(path string) (string, error) {
+		if path != "/etc/aquaos/secrets/node.token" {
+			t.Fatalf("secret path = %q", path)
+		}
+		return "token", nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	results, err := service.Probe(context.Background(), []Candidate{{Kind: KindESP32, BaseURL: "http://node.local", BearerTokenFile: "/etc/aquaos/secrets/node.token"}})
+	if err != nil || !results[0].Reachable {
+		t.Fatalf("results=%+v err=%v", results, err)
+	}
+	if _, err = service.Probe(context.Background(), []Candidate{{Kind: KindESP32, BaseURL: "http://node.local", BearerTokenFile: "/etc/passwd"}}); err == nil {
+		t.Fatal("credential file outside AquaOS secrets was accepted")
+	}
+}

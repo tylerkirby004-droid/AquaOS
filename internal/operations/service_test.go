@@ -216,6 +216,18 @@ func TestFailedConfigurationActivationRollsBack(t *testing.T) {
 	}
 }
 
+func TestCommissioningRequiresPersistedBenchEvidence(t *testing.T) {
+	current := config.Config{Inventory: config.Inventory{Equipment: []config.Equipment{{ID: "heater", Commissioning: config.Commissioning{Stage: "uncommissioned"}}}}}
+	candidate := config.Config{Inventory: config.Inventory{Equipment: []config.Equipment{{ID: "heater", Commissioning: config.Commissioning{Stage: "commissioned"}}}}}
+	if err := validateCommissioningTransition(current, candidate); err == nil {
+		t.Fatal("direct commissioning transition was accepted")
+	}
+	current.Inventory.Equipment[0].Commissioning.Stage = "bench-tested"
+	if err := validateCommissioningTransition(current, candidate); err != nil {
+		t.Fatalf("bench-tested transition rejected: %v", err)
+	}
+}
+
 func TestPackagedSystemdUnitMatchesInstaller(t *testing.T) {
 	payload, err := os.ReadFile("../../packaging/systemd/aquaos.service")
 	if err != nil {

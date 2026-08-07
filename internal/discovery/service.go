@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -30,23 +31,24 @@ const (
 
 // Candidate is an operator-approved address to probe without mutation.
 type Candidate struct {
-	Kind        Kind   `json:"kind"`
-	BaseURL     string `json:"baseUrl"`
-	Channel     int    `json:"channel,omitempty"`
-	BearerToken string `json:"-"`
+	Kind            Kind   `json:"kind"`
+	BaseURL         string `json:"baseUrl"`
+	Channel         int    `json:"channel,omitempty"`
+	BearerTokenFile string `json:"bearerTokenFile,omitempty"`
 }
 
 // Result is a protocol-neutral discovery snapshot suitable for mapping UI.
 type Result struct {
-	Kind         Kind     `json:"kind"`
-	BaseURL      string   `json:"baseUrl"`
-	Channel      int      `json:"channel,omitempty"`
-	Reachable    bool     `json:"reachable"`
-	Identity     string   `json:"identity,omitempty"`
-	Firmware     string   `json:"firmware,omitempty"`
-	Capabilities []string `json:"capabilities,omitempty"`
-	ProbeIDs     []string `json:"probeIds,omitempty"`
-	Message      string   `json:"message,omitempty"`
+	Kind            Kind     `json:"kind"`
+	BaseURL         string   `json:"baseUrl"`
+	Channel         int      `json:"channel,omitempty"`
+	Reachable       bool     `json:"reachable"`
+	Identity        string   `json:"identity,omitempty"`
+	Firmware        string   `json:"firmware,omitempty"`
+	Capabilities    []string `json:"capabilities,omitempty"`
+	ProbeIDs        []string `json:"probeIds,omitempty"`
+	BearerTokenFile string   `json:"bearerTokenFile,omitempty"`
+	Message         string   `json:"message,omitempty"`
 }
 
 // ShellyClient is the read-only client subset consumed by discovery.
@@ -66,17 +68,25 @@ type Service struct {
 	esp32       ESP32Client
 	concurrency int
 	timeout     time.Duration
+	readSecret  func(string) (string, error)
 }
 
 // New constructs a discovery service with explicit resource bounds.
-func New(shellyClient ShellyClient, esp32Client ESP32Client, concurrency int, timeout time.Duration) (*Service, error) {
+func New(shellyClient ShellyClient, esp32Client ESP32Client, concurrency int, timeout time.Duration, readSecret ...func(string) (string, error)) (*Service, error) {
 	if shellyClient == nil || esp32Client == nil {
 		return nil, errors.New("discovery clients are required")
 	}
 	if concurrency < 1 || concurrency > 16 || timeout <= 0 || timeout > 30*time.Second {
 		return nil, errors.New("discovery concurrency or timeout is outside safe bounds")
 	}
-	return &Service{shelly: shellyClient, esp32: esp32Client, concurrency: concurrency, timeout: timeout}, nil
+	service := &Service{shelly: shellyClient, esp32: esp32Client, concurrency: concurrency, timeout: timeout}
+	if len(readSecret) > 1 {
+		return nil, errors.New("at most one discovery secret reader is supported")
+	}
+	if len(readSecret) == 1 {
+		service.readSecret = readSecret[0]
+	}
+	return service, nil
 }
 
 // Probe checks only the supplied candidates, preserves one result per input,
@@ -140,11 +150,20 @@ func validateCandidate(candidate Candidate) error {
 	if candidate.Kind == KindShelly && (candidate.Channel < 0 || candidate.Channel > 31) {
 		return errors.New("shelly channel is outside supported bounds")
 	}
+	if candidate.BearerTokenFile != "" {
+		if candidate.Kind != KindESP32 {
+			return errors.New("credential files are supported only for ESP32 nodes")
+		}
+		clean := filepath.ToSlash(filepath.Clean(candidate.BearerTokenFile))
+		if !strings.HasPrefix(clean, "/etc/aquaos/secrets/") {
+			return errors.New("credential file must be under /etc/aquaos/secrets")
+		}
+	}
 	return nil
 }
 
 func (s *Service) probe(ctx context.Context, candidate Candidate) Result {
-	result := Result{Kind: candidate.Kind, BaseURL: candidate.BaseURL, Channel: candidate.Channel}
+	result := Result{Kind: candidate.Kind, BaseURL: candidate.BaseURL, Channel: candidate.Channel, BearerTokenFile: candidate.BearerTokenFile}
 	switch candidate.Kind {
 	case KindShelly:
 		status, err := s.shelly.GetSwitchStatus(ctx, candidate.BaseURL, candidate.Channel)
@@ -162,7 +181,20 @@ func (s *Service) probe(ctx context.Context, candidate Candidate) Result {
 		result.Capabilities = []string{"switch", "reported-state", "power-telemetry"}
 		result.Message = "Power-return policy: " + configuration.InitialState
 	case KindESP32:
-		snapshot, err := s.esp32.Snapshot(ctx, candidate.BaseURL, candidate.BearerToken)
+		var token string
+		if candidate.BearerTokenFile != "" {
+			if s.readSecret == nil {
+				result.Message = "ESP32 credential file cannot be read by this service."
+				return result
+			}
+			var err error
+			token, err = s.readSecret(candidate.BearerTokenFile)
+			if err != nil {
+				result.Message = "ESP32 credential file could not be read."
+				return result
+			}
+		}
+		snapshot, err := s.esp32.Snapshot(ctx, candidate.BaseURL, token)
 		if err != nil {
 			result.Message = "ESP32 node did not return a valid AquaOS snapshot."
 			return result

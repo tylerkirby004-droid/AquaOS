@@ -58,7 +58,7 @@ func run() int {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	discoveryService, err := discovery.New(shellyClient, esp32Client, 4, 3*time.Second)
+	discoveryService, err := discovery.New(shellyClient, esp32Client, 4, 3*time.Second, readToken)
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		return 1

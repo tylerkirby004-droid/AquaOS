@@ -44,7 +44,7 @@ jobs:
         with:
           version: v2.11.4
       - name: Vulnerability scan
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
       - name: Secret scan
         uses: gitleaks/gitleaks-action@v2
         env:
@@ -62,5 +62,6 @@ jobs:
         run: |
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o /tmp/aquaos-linux-amd64 ./cmd/aquaos
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o /tmp/aquaos-linux-arm64 ./cmd/aquaos
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath ./cmd/aquaosctl ./cmd/aquaos-admin
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath ./cmd/aquaosctl ./cmd/aquaos-admin ./cmd/aquaos-deploy
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath ./cmd/aquaos-deploy
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath ./cmd/aquaosctl ./cmd/aquaos-admin
