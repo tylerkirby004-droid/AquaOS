@@ -113,7 +113,7 @@ func (r *Registry) AIObservation(service, kind string) (string, Policy, error) {
 // generation and cleanup remain Prompt 10 responsibilities.
 func (r *Registry) HADiscovery(component, objectID string) (string, Policy, error) {
 	if !topicSegmentPattern.MatchString(component) || !topicSegmentPattern.MatchString(objectID) {
-		return "", Policy{}, errors.New("Home Assistant component and object ID must be lowercase kebab-case") //nolint:staticcheck // Home Assistant is a proper product name.
+		return "", Policy{}, errors.New("component and object ID for Home Assistant must be lowercase kebab-case")
 	}
 	return fmt.Sprintf("homeassistant/%s/%s/config", component, objectID), Policy{Purpose: PurposeHADiscovery, QoS: 1, Retained: true}, nil
 }
