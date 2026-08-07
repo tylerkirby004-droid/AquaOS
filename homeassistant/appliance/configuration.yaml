@@ -1,0 +1,13 @@
+default_config:
+
+automation: !include automations.yaml
+
+lovelace:
+  mode: storage
+  dashboards:
+    aquaos-dashboard:
+      mode: yaml
+      title: AquaOS
+      icon: mdi:fishbowl
+      show_in_sidebar: true
+      filename: aquaos-dashboard.yaml

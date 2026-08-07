@@ -22,6 +22,7 @@ func validConfig(t *testing.T) Config {
 		}
 	}
 	return Config{
+		SiteID:        "home-reef",
 		Proxmox:       Proxmox{Host: "pve.local", User: "root", Node: "pve", Storage: "local-lvm", Bridge: "vmbr0", IdentityFile: directory, PublicKeyFile: "/root/.ssh/aquaos.pub", DebianTemplateID: 9000, HAOSTemplateID: 9001},
 		Control:       Guest{VMID: 200, Name: "aquaos-control", Address: "192.168.10.20", CIDR: "192.168.10.20/24", Gateway: "192.168.10.1", Cores: 2, MemoryMiB: 4096, DiskGiB: 32},
 		Services:      Guest{VMID: 201, Name: "aquaos-services", Address: "192.168.10.21", CIDR: "192.168.10.21/24", Gateway: "192.168.10.1", Cores: 4, MemoryMiB: 8192, DiskGiB: 80},

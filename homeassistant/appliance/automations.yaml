@@ -1,0 +1,31 @@
+- id: aquaos_local_alarm_notification
+  alias: AquaOS alarm notification
+  description: Creates a local Home Assistant notification; control does not depend on it.
+  mode: queued
+  max: 10
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.AQUAOS_ALARM_ENTITY
+      from: "off"
+      to: "on"
+  actions:
+    - action: persistent_notification.create
+      data:
+        title: AquaOS alarm active
+        message: >-
+          AquaOS reports one or more active alarms. Open the AquaOS dashboard,
+          inspect current sensor quality, and acknowledge alarms only after the
+          underlying condition has been checked.
+        notification_id: aquaos_active_alarm
+- id: aquaos_local_alarm_cleared
+  alias: AquaOS alarm notification cleared
+  mode: restart
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.AQUAOS_ALARM_ENTITY
+      from: "on"
+      to: "off"
+  actions:
+    - action: persistent_notification.dismiss
+      data:
+        notification_id: aquaos_active_alarm

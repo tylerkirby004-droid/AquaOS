@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/subtle"
+	"crypto/tls"
 	"embed"
 	"encoding/base64"
 	"encoding/hex"
@@ -52,12 +53,23 @@ type Discovery interface {
 	Probe(context.Context, []discovery.Candidate) ([]discovery.Result, error)
 }
 
+// RuntimeHealth reads the authoritative Core health report without exposing
+// Core credentials to the browser.
+type RuntimeHealth interface {
+	Report(context.Context) (any, error)
+}
+
 // Option configures optional Admin capabilities.
 type Option func(*Server)
 
 // WithDiscovery enables bounded, read-only Shelly and ESP32 probing.
 func WithDiscovery(service Discovery) Option {
 	return func(server *Server) { server.discovery = service }
+}
+
+// WithRuntimeHealth enables the read-only operational status panel.
+func WithRuntimeHealth(service RuntimeHealth) Option {
+	return func(server *Server) { server.runtimeHealth = service }
 }
 
 // Config contains externally supplied listener and request bounds.
@@ -70,6 +82,8 @@ type Config struct {
 	AuthenticationBurst int
 	MutationRate        int
 	MutationBurst       int
+	TLSCertificateFile  string
+	TLSKeyFile          string
 }
 
 // Server owns the authenticated Admin GUI listener.
@@ -87,6 +101,7 @@ type Server struct {
 	authentication   *requestLimiter
 	mutations        *requestLimiter
 	discovery        Discovery
+	runtimeHealth    RuntimeHealth
 }
 
 // New constructs an Admin GUI server without starting it.
@@ -96,6 +111,9 @@ func New(cfg Config, service Operations, logger *slog.Logger, options ...Option)
 	}
 	if service == nil || logger == nil {
 		return nil, errors.New("admin operations and logger are required")
+	}
+	if (cfg.TLSCertificateFile == "") != (cfg.TLSKeyFile == "") {
+		return nil, errors.New("admin TLS certificate and key must be supplied together")
 	}
 	web, err := fs.Sub(assets, "web")
 	if err != nil {
@@ -110,6 +128,7 @@ func New(cfg Config, service Operations, logger *slog.Logger, options ...Option)
 	mux.Handle("GET /admin/", http.StripPrefix("/admin/", http.FileServer(http.FS(web))))
 	mux.Handle("GET /api/status", result.authorize(http.HandlerFunc(result.status)))
 	mux.Handle("GET /api/config", result.authorize(http.HandlerFunc(result.configuration)))
+	mux.Handle("GET /api/runtime", result.authorize(http.HandlerFunc(result.runtime)))
 	mux.Handle("POST /api/config/editable/validate", result.authorize(http.HandlerFunc(result.validateEditableConfiguration)))
 	mux.Handle("POST /api/config/editable/apply", result.authorize(http.HandlerFunc(result.applyEditableConfiguration)))
 	mux.Handle("POST /api/discovery/probe", result.authorize(http.HandlerFunc(result.probe)))
@@ -132,6 +151,14 @@ func (*Server) Name() string { return "admin" }
 
 // Start starts explicitly owned serving work.
 func (s *Server) Start(ctx context.Context) error {
+	var tlsConfiguration *tls.Config
+	if s.cfg.TLSCertificateFile != "" {
+		certificate, err := tls.LoadX509KeyPair(s.cfg.TLSCertificateFile, s.cfg.TLSKeyFile)
+		if err != nil {
+			return fmt.Errorf("load admin TLS identity: %w", err)
+		}
+		tlsConfiguration = &tls.Config{Certificates: []tls.Certificate{certificate}, MinVersion: tls.VersionTLS12}
+	}
 	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", s.server.Addr)
 	if err != nil {
 		return err
@@ -147,7 +174,11 @@ func (s *Server) Start(ctx context.Context) error {
 	s.mu.Unlock()
 	go func() {
 		defer close(done)
-		err := s.server.Serve(listener)
+		serveListener := listener
+		if tlsConfiguration != nil {
+			serveListener = tls.NewListener(listener, tlsConfiguration)
+		}
+		err := s.server.Serve(serveListener)
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			s.mu.Lock()
 			s.serveErr = err
@@ -251,6 +282,14 @@ func (s *Server) secure(next http.Handler) http.Handler {
 func actor() operations.Actor { return operations.Actor{ID: "admin-gui", Administrator: true} }
 func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	value, err := s.operations.GetStatus(r.Context(), actor())
+	s.respond(w, value, err)
+}
+func (s *Server) runtime(w http.ResponseWriter, r *http.Request) {
+	if s.runtimeHealth == nil {
+		writeProblem(w, http.StatusServiceUnavailable, "runtime_unavailable", "AquaOS Core status is unavailable.")
+		return
+	}
+	value, err := s.runtimeHealth.Report(r.Context())
 	s.respond(w, value, err)
 }
 func (s *Server) configuration(w http.ResponseWriter, r *http.Request) {

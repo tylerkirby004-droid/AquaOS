@@ -30,7 +30,7 @@ func run(arguments []string, stdout, stderr io.Writer) int {
 	}
 	remaining := flags.Args()
 	if len(remaining) == 0 {
-		_, _ = fmt.Fprintln(stderr, "usage: aquaosctl [--root /] <install|status|verify|configure|repair|backup|restore|upgrade|rollback|diagnostics|remove-role|uninstall>")
+		_, _ = fmt.Fprintln(stderr, "usage: aquaosctl [--root /] <install|status|verify|verify-artifact|configure|repair|backup|restore|upgrade|rollback|diagnostics|remove-role|uninstall>")
 		return 2
 	}
 	host, err := operations.NewLocalHost(*root)
@@ -89,6 +89,8 @@ func run(arguments []string, stdout, stderr io.Writer) int {
 		} else {
 			result, err = service.Upgrade(ctx, request)
 		}
+	case "verify-artifact":
+		result, err = verifyReleaseArtifact(args)
 	case "backup":
 		result, err = backup(ctx, service, actor, args)
 	case "restore":
@@ -111,6 +113,29 @@ func run(arguments []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+func verifyReleaseArtifact(arguments []string) (operations.Result, error) {
+	flags := flag.NewFlagSet("verify-artifact", flag.ContinueOnError)
+	binaryPath := flags.String("binary", "", "release artifact")
+	checksum := flags.String("sha256", "", "expected SHA-256")
+	signatureValue := flags.String("signature", "", "hex Ed25519 signature or file path")
+	keyValue := flags.String("public-key", "", "hex trusted Ed25519 public key or file path")
+	if err := flags.Parse(arguments); err != nil {
+		return operations.Result{}, err
+	}
+	binary, err := os.ReadFile(*binaryPath)
+	if err != nil {
+		return operations.Result{}, err
+	}
+	signature, key, err := verification(*signatureValue, *keyValue)
+	if err != nil {
+		return operations.Result{}, err
+	}
+	if err = operations.VerifyReleaseArtifact(binary, *checksum, signature, key); err != nil {
+		return operations.Result{}, err
+	}
+	return operations.Result{Operation: "verify-artifact", Actions: []string{"verify checksum and Ed25519 signature"}}, nil
 }
 
 func localActor(root string) (operations.Actor, error) {
@@ -137,7 +162,7 @@ func parseInstall(arguments []string, actor operations.Actor) (operations.Instal
 	checksum := flags.String("sha256", "", "expected SHA-256")
 	signature := flags.String("signature", "", "hex Ed25519 signature or file path")
 	publicKey := flags.String("public-key", "", "hex trusted Ed25519 public key or file path")
-	ack := flags.Bool("ack-control-vm", false, "confirm this is a dedicated Control VM, not a Proxmox host")
+	ack := flags.Bool("ack-control-vm", false, "confirm this is a dedicated AquaOS control host, not a Proxmox host")
 	dryRun := flags.Bool("dry-run", false, "validate and report without mutation")
 	if err := flags.Parse(arguments); err != nil {
 		return operations.InstallRequest{}, err

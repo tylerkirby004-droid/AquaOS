@@ -115,7 +115,7 @@ func authorize(actor Actor) error {
 }
 func (s *Service) preflight(ack bool) error {
 	if !ack {
-		return errors.New("dedicated Control VM acknowledgement is required")
+		return errors.New("dedicated AquaOS control host acknowledgement is required")
 	}
 	if s.host.GOOS() != "linux" || s.host.GOARCH() != "amd64" {
 		return fmt.Errorf("unsupported production platform %s/%s; require linux/amd64", s.host.GOOS(), s.host.GOARCH())
@@ -589,6 +589,12 @@ func verifyArtifact(binary []byte, expected string, signature []byte, key ed2551
 	return nil
 }
 
+// VerifyReleaseArtifact validates one signed release file without changing the
+// host. Installers use the same policy as installation and upgrades.
+func VerifyReleaseArtifact(binary []byte, expected string, signature []byte, key ed25519.PublicKey) error {
+	return verifyArtifact(binary, expected, signature, key)
+}
+
 // ManagedPaths returns the exact paths operations may modify.
 func ManagedPaths() []string {
 	values := []string{binaryPath, configPath, versionPath, unitPath, sysusersPath, tmpfilesPath, "/var/lib/aquaos/rollback/aquaos", "/var/lib/aquaos/rollback/version", "/var/lib/aquaos/rollback/aquaos.yaml"}
@@ -605,9 +611,12 @@ Wants=network-online.target
 Type=simple
 User=aquaos
 Group=aquaos
+EnvironmentFile=-/etc/aquaos/aquaos.env
 ExecStart=/opt/aquaos/bin/aquaos -config /etc/aquaos/aquaos.yaml
 Restart=on-failure
 RestartSec=5s
+CPUWeight=1000
+OOMScoreAdjust=-500
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict

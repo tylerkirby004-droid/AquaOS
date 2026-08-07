@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -25,6 +26,10 @@ func main() { os.Exit(run()) }
 func run() int {
 	address := flag.String("address", "127.0.0.1:8090", "Admin GUI listen address")
 	tokenFile := flag.String("token-file", "", "bearer token file")
+	tlsCertificate := flag.String("tls-cert", "", "TLS certificate PEM file")
+	tlsKey := flag.String("tls-key", "", "TLS private-key PEM file")
+	coreURL := flag.String("core-url", "http://localhost:8080", "local AquaOS Core API base URL")
+	coreTokenFile := flag.String("core-token-file", "", "AquaOS Core API token file")
 	root := flag.String("root", "/", "managed Control VM root")
 	authenticationRate := flag.Int("authentication-rate", 5, "authentication attempts per second per client")
 	authenticationBurst := flag.Int("authentication-burst", 10, "authentication attempt burst per client")
@@ -63,7 +68,16 @@ func run() int {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	server, err := admin.New(admin.Config{Address: *address, Token: token, MaximumRequestBytes: 32 * 1024 * 1024, ShutdownTimeout: 10 * time.Second, AuthenticationRate: *authenticationRate, AuthenticationBurst: *authenticationBurst, MutationRate: *mutationRate, MutationBurst: *mutationBurst}, service, logger.With("component", "admin"), admin.WithDiscovery(discoveryService))
+	options := []admin.Option{admin.WithDiscovery(discoveryService)}
+	if *coreTokenFile != "" {
+		coreToken, tokenErr := readToken(*coreTokenFile)
+		if tokenErr != nil {
+			_, _ = fmt.Fprintln(os.Stderr, tokenErr)
+			return 1
+		}
+		options = append(options, admin.WithRuntimeHealth(&coreHealthClient{client: httpClient, baseURL: strings.TrimRight(*coreURL, "/"), token: coreToken}))
+	}
+	server, err := admin.New(admin.Config{Address: *address, Token: token, MaximumRequestBytes: 32 * 1024 * 1024, ShutdownTimeout: 10 * time.Second, AuthenticationRate: *authenticationRate, AuthenticationBurst: *authenticationBurst, MutationRate: *mutationRate, MutationBurst: *mutationBurst, TLSCertificateFile: *tlsCertificate, TLSKeyFile: *tlsKey}, service, logger.With("component", "admin"), options...)
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		return 1
@@ -83,6 +97,46 @@ func run() int {
 		return 1
 	}
 	return 0
+}
+
+type coreHealthClient struct {
+	client  *http.Client
+	baseURL string
+	token   string
+}
+
+func (c *coreHealthClient) Report(ctx context.Context) (any, error) {
+	healthReport, err := c.get(ctx, "/api/v1/health")
+	if err != nil {
+		return nil, err
+	}
+	stateReport, err := c.get(ctx, "/api/v1/state")
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"health": healthReport, "canonicalState": stateReport}, nil
+}
+
+func (c *coreHealthClient) get(ctx context.Context, path string) (any, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Authorization", "Bearer "+c.token)
+	response, err := c.client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("core health returned HTTP %d", response.StatusCode)
+	}
+	var report any
+	decoder := json.NewDecoder(io.LimitReader(response.Body, 1024*1024))
+	if err = decoder.Decode(&report); err != nil {
+		return nil, err
+	}
+	return report, nil
 }
 func readToken(path string) (string, error) {
 	if path == "" {

@@ -111,7 +111,7 @@ func TestDiscoveryFixtureIsStableGroupedAndRetained(t *testing.T) {
 	if transport.subscribed != "aquaos/test-reef/v1/home-assistant/+/set" {
 		t.Fatalf("subscription = %q", transport.subscribed)
 	}
-	if len(transport.publications) != 5 {
+	if len(transport.publications) != 6 {
 		t.Fatalf("publication count = %d", len(transport.publications))
 	}
 	seen := map[string]discoveryPayload{}

@@ -126,11 +126,11 @@ Core, recovery tools, optional services, Home Assistant, Grafana, Admin GUI,
 hardware bench, display kiosk, backups, and acceptance checks—follow the
 [complete installation guide](docs/installation.md).
 
-For a new user installing the complete three-VM system, start with the
-[guided easy-install path](docs/easy-install.md). It prepares approved
-templates, generates a reviewable deployment plan, installs Core and optional
-services, and then hands off only the safety-critical browser and hardware
-steps that require a person.
+For most new users, start with the
+[dedicated Debian appliance installer](docs/appliance-installation.md). It keeps
+Core native while installing the optional dashboard stack and handing off to a
+browser wizard. The [guided Proxmox path](docs/easy-install.md) remains the
+advanced option when stronger VM isolation is preferred.
 
 ## Safe development startup
 

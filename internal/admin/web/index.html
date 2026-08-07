@@ -30,12 +30,13 @@
         <div class="card warning"><strong>Before continuing</strong><p>Keep heaters, dosing pumps, and top-off equipment disconnected or connected only to a safe test load until the commissioning checks pass.</p></div>
         <label for="token">Administrator access code</label>
         <div class="inline"><input id="token" type="password" autocomplete="current-password" placeholder="Paste the code from the Control VM"><button id="connect" class="primary">Connect safely</button></div>
-        <p class="help">The code stays in this browser tab and is not saved.</p>
+        <p class="help">The code comes from the dedicated AquaOS control host, stays in this browser tab, and is not saved.</p>
       </section>
 
       <section id="system" class="view">
-        <p class="eyebrow">Step 2</p><h1>Check the Control VM</h1>
+        <p class="eyebrow">Step 2</p><h1>Check the AquaOS control host</h1>
         <p>All four checks should pass before configuring real equipment.</p>
+        <h2>Live subsystem status</h2><div id="runtimeStatus" class="check-grid"><p class="empty">Connect to load live Core, device, MQTT, storage, and integration status.</p></div>
         <div id="checks" class="check-grid"><p class="empty">Connect first, then choose “Run all checks.”</p></div>
         <button id="verify" class="primary">Run all checks</button>
       </section>

@@ -16,6 +16,7 @@ import (
 	paho "github.com/eclipse/paho.mqtt.golang"
 	"github.com/tylerkirby004-droid/aquaos/internal/alarms"
 	"github.com/tylerkirby004-droid/aquaos/internal/domain"
+	"github.com/tylerkirby004-droid/aquaos/internal/events"
 	"github.com/tylerkirby004-droid/aquaos/internal/health"
 	"github.com/tylerkirby004-droid/aquaos/internal/mqtt"
 	"github.com/tylerkirby004-droid/aquaos/internal/output"
@@ -52,10 +53,11 @@ type Tombstone struct {
 
 // Config contains externally selected Home Assistant behavior.
 type Config struct {
-	SiteID         string
-	CommandTTL     time.Duration
-	MaximumPayload int
-	Tombstones     []Tombstone
+	SiteID              string
+	CommandTTL          time.Duration
+	MaximumPayload      int
+	Tombstones          []Tombstone
+	NotificationRuleIDs []domain.RuleID
 }
 
 type entity struct {
@@ -203,23 +205,43 @@ func (m *Manager) Refresh(ctx context.Context) error {
 
 func (m *Manager) publishStatus(ctx context.Context) error {
 	activeCount := 0
+	notificationCount := 0
 	if m.alarms != nil {
 		active, err := m.alarms.List(ctx, alarms.StatusActive)
 		if err != nil {
 			return err
 		}
 		activeCount = len(active)
+		notificationRules := make(map[domain.RuleID]struct{}, len(m.cfg.NotificationRuleIDs))
+		for _, ruleID := range m.cfg.NotificationRuleIDs {
+			notificationRules[ruleID] = struct{}{}
+		}
+		for _, alarm := range active {
+			if _, enabled := notificationRules[alarm.RuleID]; enabled {
+				notificationCount++
+			}
+		}
 	}
 	correlationID, err := domain.NewCorrelationID()
 	if err != nil {
 		return err
 	}
-	payload, err := m.codec.Encode("ha-status", "home-assistant", correlationID, m.now().UTC(), nil, nil, map[string]any{"status": "online", "activeAlarmCount": activeCount})
+	payload, err := m.codec.Encode("ha-status", "home-assistant", correlationID, m.now().UTC(), nil, nil, map[string]any{"status": "online", "activeAlarmCount": activeCount, "notificationAlarmCount": notificationCount})
 	if err != nil {
 		return err
 	}
 	topic, policy := m.registry.HAStatus()
 	return m.transport.Publish(ctx, topic, policy.QoS, policy.Retained, payload)
+}
+
+// HandleAlarmEvent refreshes the optional diagnostic status without allowing
+// Home Assistant or broker failure to fail the authoritative alarm transition.
+func (m *Manager) HandleAlarmEvent(ctx context.Context, event events.Event) error {
+	if err := m.publishStatus(ctx); err != nil {
+		m.setError(err)
+		m.logger.WarnContext(ctx, "Home Assistant alarm status unavailable", "event_type", event.EventType, "error", err)
+	}
+	return nil
 }
 
 func (m *Manager) clear(ctx context.Context, component, objectID string) error {
@@ -259,7 +281,7 @@ func (m *Manager) entities(ctx context.Context) ([]entity, map[string]domain.Equ
 		if topicErr != nil {
 			return nil, nil, topicErr
 		}
-		payload := discoveryPayload{Name: sensor.Name, UniqueID: "aquaos_sensor_" + string(sensor.ID), StateTopic: stateTopic, AvailabilityTopic: availability, ValueTemplate: "{{ value_json.data.value.quantity.value }}", UnitOfMeasurement: haUnit(sensor.Unit), DeviceClass: deviceClass(sensor.Quantity), StateClass: "measurement", Device: deviceInfo(sensor.DeviceID, names[sensor.DeviceID])}
+		payload := discoveryPayload{Name: sensor.Name, UniqueID: "aquaos_sensor_" + string(sensor.ID), SuggestedObjectID: entityObjectID("sensor", string(sensor.ID)), StateTopic: stateTopic, AvailabilityTopic: availability, ValueTemplate: "{{ value_json.data.value.quantity.value }}", UnitOfMeasurement: haUnit(sensor.Unit), DeviceClass: deviceClass(sensor.Quantity), StateClass: "measurement", Device: deviceInfo(sensor.DeviceID, names[sensor.DeviceID])}
 		encoded, _ := json.Marshal(payload)
 		items = append(items, entity{Component: "sensor", ObjectID: resource, Payload: encoded})
 	}
@@ -273,22 +295,25 @@ func (m *Manager) entities(ctx context.Context) ([]entity, map[string]domain.Equ
 		if topicErr != nil {
 			return nil, nil, topicErr
 		}
-		payload := discoveryPayload{Name: item.Name, UniqueID: "aquaos_equipment_" + string(item.ID), StateTopic: stateTopic, CommandTopic: commandTopic, AvailabilityTopic: availability, ValueTemplate: "{{ 'ON' if value_json.data.value.boolean else 'OFF' }}", PayloadOn: "ON", PayloadOff: "OFF", Device: deviceInfo(item.DeviceID, names[item.DeviceID])}
+		payload := discoveryPayload{Name: item.Name, UniqueID: "aquaos_equipment_" + string(item.ID), SuggestedObjectID: entityObjectID("equipment", string(item.ID)), StateTopic: stateTopic, CommandTopic: commandTopic, AvailabilityTopic: availability, ValueTemplate: "{{ 'ON' if value_json.data.value.boolean else 'OFF' }}", PayloadOn: "ON", PayloadOff: "OFF", Device: deviceInfo(item.DeviceID, names[item.DeviceID])}
 		encoded, _ := json.Marshal(payload)
 		items = append(items, entity{Component: "switch", ObjectID: resource, Payload: encoded})
 		allowed[resource] = item.ID
 	}
 	statusTopic, _ := m.registry.HAStatus()
-	status, _ := json.Marshal(discoveryPayload{Name: "AquaOS Core", UniqueID: "aquaos_" + m.cfg.SiteID + "_core", StateTopic: statusTopic, AvailabilityTopic: availability, ValueTemplate: "{{ value_json.data.status }}", Device: deviceInfo("", "AquaOS Core")})
+	status, _ := json.Marshal(discoveryPayload{Name: "AquaOS Core", UniqueID: "aquaos_" + m.cfg.SiteID + "_core", SuggestedObjectID: entityObjectID(m.cfg.SiteID, "core"), StateTopic: statusTopic, AvailabilityTopic: availability, ValueTemplate: "{{ value_json.data.status }}", Device: deviceInfo("", "AquaOS Core")})
 	items = append(items, entity{Component: "sensor", ObjectID: "aquaos-" + m.cfg.SiteID + "-core", Payload: status})
-	alarmPayload, _ := json.Marshal(discoveryPayload{Name: "Active alarm", UniqueID: "aquaos_" + m.cfg.SiteID + "_alarm", StateTopic: statusTopic, AvailabilityTopic: availability, ValueTemplate: "{{ 'ON' if value_json.data.activeAlarmCount > 0 else 'OFF' }}", PayloadOn: "ON", PayloadOff: "OFF", DeviceClass: "problem", Device: deviceInfo("", "AquaOS Core")})
+	alarmPayload, _ := json.Marshal(discoveryPayload{Name: "Active alarm", UniqueID: "aquaos_" + m.cfg.SiteID + "_alarm", SuggestedObjectID: entityObjectID(m.cfg.SiteID, "alarm"), StateTopic: statusTopic, AvailabilityTopic: availability, ValueTemplate: "{{ 'ON' if value_json.data.activeAlarmCount > 0 else 'OFF' }}", PayloadOn: "ON", PayloadOff: "OFF", DeviceClass: "problem", Device: deviceInfo("", "AquaOS Core")})
 	items = append(items, entity{Component: "binary_sensor", ObjectID: "aquaos-" + m.cfg.SiteID + "-alarm", Payload: alarmPayload})
+	notificationPayload, _ := json.Marshal(discoveryPayload{Name: "Notifiable alarm", UniqueID: "aquaos_" + m.cfg.SiteID + "_notification", SuggestedObjectID: entityObjectID(m.cfg.SiteID, "notification"), StateTopic: statusTopic, AvailabilityTopic: availability, ValueTemplate: "{{ 'ON' if value_json.data.notificationAlarmCount > 0 else 'OFF' }}", PayloadOn: "ON", PayloadOff: "OFF", DeviceClass: "problem", Device: deviceInfo("", "AquaOS Core")})
+	items = append(items, entity{Component: "binary_sensor", ObjectID: "aquaos-" + m.cfg.SiteID + "-notification", Payload: notificationPayload})
 	return items, allowed, nil
 }
 
 type discoveryPayload struct {
 	Name              string   `json:"name"`
 	UniqueID          string   `json:"unique_id"`
+	SuggestedObjectID string   `json:"object_id"`
 	StateTopic        string   `json:"state_topic"`
 	CommandTopic      string   `json:"command_topic,omitempty"`
 	AvailabilityTopic string   `json:"availability_topic"`
@@ -300,6 +325,17 @@ type discoveryPayload struct {
 	StateClass        string   `json:"state_class,omitempty"`
 	Device            haDevice `json:"device"`
 }
+
+func entityObjectID(kind, id string) string {
+	value := strings.ToLower("aquaos_" + kind + "_" + id)
+	return strings.Map(func(character rune) rune {
+		if character >= 'a' && character <= 'z' || character >= '0' && character <= '9' || character == '_' {
+			return character
+		}
+		return '_'
+	}, value)
+}
+
 type haDevice struct {
 	Identifiers  []string `json:"identifiers"`
 	Name         string   `json:"name"`

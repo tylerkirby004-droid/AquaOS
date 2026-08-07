@@ -258,16 +258,37 @@ func New(cfg config.Config, configPath string, logger *slog.Logger, supplied ...
 		}
 		mqttClient = mqttConcrete
 		monitored = append(monitored, mqttClient)
+		exporter, exporterErr := mqtt.NewEventExporter(cfg.MQTT.SiteID, cfg.MQTT.MaximumPayload, mqttClient, logger.With("component", "mqtt-exporter"))
+		if exporterErr != nil {
+			return nil, fmt.Errorf("construct MQTT event exporter: %w", exporterErr)
+		}
+		if _, exporterErr = exporter.Attach(eventBus); exporterErr != nil {
+			return nil, fmt.Errorf("attach MQTT event exporter: %w", exporterErr)
+		}
 		if cfg.MQTT.HomeAssistant.Enabled {
+			notificationRuleIDs := make([]domain.RuleID, 0, len(cfg.Alarms.Rules))
+			for _, rule := range cfg.Alarms.Rules {
+				for _, target := range rule.Notifications {
+					if target == "home-assistant" {
+						notificationRuleIDs = append(notificationRuleIDs, domain.RuleID(rule.ID))
+						break
+					}
+				}
+			}
 			tombstones := make([]homeassistant.Tombstone, 0, len(cfg.MQTT.HomeAssistant.Tombstones))
 			for _, item := range cfg.MQTT.HomeAssistant.Tombstones {
 				tombstones = append(tombstones, homeassistant.Tombstone{Component: item.Component, ObjectID: item.ObjectID})
 			}
-			homeAssistant, err = homeassistant.New(homeassistant.Config{SiteID: cfg.MQTT.SiteID, CommandTTL: cfg.MQTT.HomeAssistant.CommandTTL, MaximumPayload: cfg.MQTT.MaximumPayload, Tombstones: tombstones}, mqttClient, homeassistant.RegistryInventory{DeviceRegistry: deviceRegistry, SensorRegistry: sensorManager, EquipmentRegistry: equipmentManager}, alarmManager, outputService, logger.With("component", "home-assistant"))
+			homeAssistant, err = homeassistant.New(homeassistant.Config{SiteID: cfg.MQTT.SiteID, CommandTTL: cfg.MQTT.HomeAssistant.CommandTTL, MaximumPayload: cfg.MQTT.MaximumPayload, Tombstones: tombstones, NotificationRuleIDs: notificationRuleIDs}, mqttClient, homeassistant.RegistryInventory{DeviceRegistry: deviceRegistry, SensorRegistry: sensorManager, EquipmentRegistry: equipmentManager}, alarmManager, outputService, logger.With("component", "home-assistant"))
 			if err != nil {
 				return nil, fmt.Errorf("construct Home Assistant integration: %w", err)
 			}
 			mqttConcrete.SetReconciler(homeAssistant.Refresh)
+			for _, eventType := range []events.Type{events.AlarmRaised, events.AlarmAcknowledged, events.AlarmCleared, events.AlarmEscalated} {
+				if _, err = eventBus.Subscribe(eventType, homeAssistant.HandleAlarmEvent); err != nil {
+					return nil, fmt.Errorf("attach Home Assistant alarm status: %w", err)
+				}
+			}
 			monitored = append(monitored, homeAssistant)
 		}
 	}

@@ -15,10 +15,12 @@ physical state
     -> reported-state reconciliation
 ```
 
-AquaOS Core in a dedicated minimal Linux amd64 Control VM on Proxmox is the
-authoritative local controller and runs natively under systemd. AquaOS is never
-installed directly on the Proxmox host, and Docker is not part of the critical
-Core path. The baseline future adapters are Ethernet/PoE ESP32 sensor nodes and
+AquaOS Core on a dedicated Linux amd64 control host is the authoritative local
+controller and runs natively under systemd. ADR-022 makes a dedicated Debian
+appliance the default guided profile; the separate Proxmox Control VM remains
+the advanced strong-isolation profile. AquaOS is never installed directly on
+the Proxmox host, and Docker is not part of the critical Core path. The baseline
+adapters are Ethernet/PoE ESP32 sensor nodes and
 Shelly Plug US Gen4 outputs communicating directly over the local LAN. Reef-Pi
 is only a possible future compatibility adapter.
 
@@ -29,14 +31,15 @@ commands are requests that must pass through AquaOS Core policy.
 
 The Raspberry Pi 4B is an optional display/kiosk for Home Assistant, Grafana,
 and AquaOS status pages; its failure has zero control impact. Home Assistant is
-the normal operational UI. The future Admin GUI is a non-authoritative
+the normal operational UI. The AquaOS Admin GUI is a non-authoritative
 operations client, and all of its mutations pass through authenticated Core
 APIs/application services and safety validation.
 
-The Control VM does not eliminate its physical host failure domain. Proxmox-host
-failure stops Core. Independent physical equipment safeguards, UPS planning for
-the host and network, automatic VM/service startup, tested backups/restores,
-and replacement-host recovery mitigate that risk without hiding it.
+Neither deployment profile eliminates its physical-host failure domain. A
+Proxmox-host or dedicated-appliance failure stops Core. Independent physical
+equipment safeguards, UPS planning for the host and network, automatic service
+startup, tested backups/restores, and replacement-host recovery mitigate that
+risk without hiding it.
 
 ## Foundation scope
 

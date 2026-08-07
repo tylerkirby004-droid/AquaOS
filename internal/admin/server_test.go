@@ -23,6 +23,11 @@ type fakeOperations struct {
 }
 
 type fakeDiscovery struct{}
+type fakeRuntime struct{}
+
+func (fakeRuntime) Report(context.Context) (any, error) {
+	return map[string]any{"health": map[string]any{"state": "degraded"}}, nil
+}
 
 func (fakeDiscovery) Probe(context.Context, []discovery.Candidate) ([]discovery.Result, error) {
 	return []discovery.Result{{Kind: discovery.KindShelly, BaseURL: "http://plug.local", Reachable: true}}, nil
@@ -146,6 +151,29 @@ func TestAdminDiscoveryUsesBoundedReadOnlyService(t *testing.T) {
 	server.server.Handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"reachable":true`) {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestAdminRuntimeStatusUsesReadOnlyCoreBoundary(t *testing.T) {
+	base := newTestServer(t, &fakeOperations{})
+	server, err := New(base.cfg, &fakeOperations{}, slog.New(slog.NewTextHandler(io.Discard, nil)), WithRuntimeHealth(fakeRuntime{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/runtime", nil)
+	request.Header.Set("Authorization", "Bearer test-token-with-at-least-32-characters")
+	response := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"degraded"`) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestAdminRejectsIncompleteTLSIdentity(t *testing.T) {
+	base := newTestServer(t, &fakeOperations{})
+	base.cfg.TLSCertificateFile = "certificate.pem"
+	if _, err := New(base.cfg, &fakeOperations{}, slog.Default()); err == nil {
+		t.Fatal("incomplete TLS identity accepted")
 	}
 }
 func TestRestorePayloadIsBounded(t *testing.T) {

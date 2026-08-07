@@ -1,6 +1,7 @@
 # AquaOS v1 least-privilege example for site ID home-reef.
 user aquaos-core
 topic read  aquaos/home-reef/v1/commands/+/request
+topic read  aquaos/home-reef/v1/home-assistant/+/set
 topic read  aquaos/home-reef/v1/ai/+/observations/+
 topic write aquaos/home-reef/v1/system/core/status
 topic write aquaos/home-reef/v1/system/core/availability
@@ -15,6 +16,7 @@ topic write homeassistant/+/+/config
 user home-assistant
 topic read  aquaos/home-reef/v1/#
 topic write aquaos/home-reef/v1/commands/+/request
+topic write aquaos/home-reef/v1/home-assistant/+/set
 topic read  homeassistant/#
 topic write homeassistant/status
 

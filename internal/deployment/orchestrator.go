@@ -24,6 +24,7 @@ var digestPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 // Config is the complete external deployment input. It contains paths and
 // identities but no passwords or private-key contents.
 type Config struct {
+	SiteID              string  `json:"siteId"`
 	Proxmox             Proxmox `json:"proxmox"`
 	Control             Guest   `json:"control"`
 	Services            Guest   `json:"services"`
@@ -184,7 +185,7 @@ func Plan(cfg Config) ([]Action, error) {
 		Action{Description: "install AquaOS Core", Command: "ssh", Arguments: append(append([]string(nil), sshBase[:len(sshBase)-1]...), controlRemote, controlInstallCommand(cfg.Release))},
 		Action{Description: "prepare optional services staging directory", Command: "ssh", Arguments: append(append([]string(nil), sshBase[:len(sshBase)-1]...), servicesRemote, "mkdir", "-p", "/tmp/aquaos-services"), Attempts: 30, RetrySeconds: 10},
 		Action{Description: "copy optional services assets", Command: "scp", Arguments: append(append([]string(nil), commonSCP...), filepath.Join(cfg.RepositoryDirectory, "infrastructure", "docker"), filepath.Join(cfg.RepositoryDirectory, "scripts", "install-optional-services.sh"), servicesRemote+":/tmp/aquaos-services")},
-		Action{Description: "install optional services", Command: "ssh", Arguments: append(append([]string(nil), sshBase[:len(sshBase)-1]...), servicesRemote, "sudo", "/tmp/aquaos-services/install-optional-services.sh", "/tmp/aquaos-services/docker")},
+		Action{Description: "install optional services", Command: "ssh", Arguments: append(append([]string(nil), sshBase[:len(sshBase)-1]...), servicesRemote, "sudo", "/tmp/aquaos-services/install-optional-services.sh", "/tmp/aquaos-services/docker", cfg.SiteID)},
 		Action{Description: "verify AquaOS Core", Command: "ssh", Arguments: append(append([]string(nil), sshBase[:len(sshBase)-1]...), controlRemote, "sudo", "/opt/aquaos/bin/aquaosctl", "verify")},
 	)
 	return actions, nil
@@ -208,6 +209,9 @@ func startupOrder(role string) string {
 // Validate rejects ambiguous identifiers, public target addresses, missing
 // signed artifacts, and overlapping VM identities before external mutation.
 func (c Config) Validate() error {
+	if !regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`).MatchString(c.SiteID) {
+		return errors.New("site ID must contain lowercase letters, digits, and hyphens")
+	}
 	for name, value := range map[string]string{"host": c.Proxmox.Host, "user": c.Proxmox.User, "node": c.Proxmox.Node, "storage": c.Proxmox.Storage, "bridge": c.Proxmox.Bridge, "version": c.Release.Version} {
 		if !safeToken.MatchString(value) {
 			return fmt.Errorf("%s contains unsupported characters", name)

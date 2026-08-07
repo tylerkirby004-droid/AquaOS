@@ -95,6 +95,15 @@ function fillForm() {
   updatePreview();
 }
 
+function renderRuntime(report) {
+  const health = report.health || report;
+  const components = Array.isArray(health.components) ? health.components : [];
+  const values = Array.isArray(report.canonicalState?.values) ? report.canonicalState.values : [];
+  const stateRows = values.filter(value => value.key?.entityKind === 'sensor' || value.key?.entityKind === 'equipment').map(value => ({name: `${value.key.entityKind}: ${value.key.entityId}`, state: value.quality || 'unknown', message: value.key.attribute || ''}));
+  const rows = [...components, ...stateRows];
+  byId('runtimeStatus').innerHTML = rows.length ? rows.map(component => `<div class="check ${component.state === 'healthy' || component.state === 'good' ? 'pass' : 'fail'}"><strong>${escapeHTML(component.name)}</strong><div>${escapeHTML(component.state || 'unknown')}${component.message ? ` — ${escapeHTML(component.message)}` : ''}</div></div>`).join('') : '<p class="empty">Core returned no component or canonical-state status.</p>';
+}
+
 function collectServices() {
   const config = editable.configuration;
   config.mqtt.enabled = byId('mqttEnabled').checked;
@@ -157,6 +166,7 @@ byId('connect').addEventListener('click', async () => {
     const [statusResponse, configResponse] = await Promise.all([call('/api/status'), call('/api/config')]);
     result.textContent = JSON.stringify(await statusResponse.json(), null, 2);
     editable = await configResponse.json();
+    try { renderRuntime(await (await call('/api/runtime')).json()); } catch (error) { byId('runtimeStatus').innerHTML = `<div class="check fail"><strong>Core status unavailable</strong><div>${escapeHTML(error.message)}</div></div>`; }
     fillForm();
     connection.textContent = 'Securely connected';
     connection.className = 'status connected';
@@ -168,7 +178,8 @@ byId('connect').addEventListener('click', async () => {
 
 byId('verify').addEventListener('click', async () => {
   try {
-    const diagnostics = await (await call('/api/verify', {method: 'POST', body: '{}'})).json();
+    const [diagnostics, runtime] = await Promise.all([(await call('/api/verify', {method: 'POST', body: '{}'})).json(), (await call('/api/runtime')).json()]);
+    renderRuntime(runtime);
     byId('checks').innerHTML = Object.entries(diagnostics.checks).map(([name, state]) => `<div class="check ${state}"><strong>${escapeHTML(name)}</strong><div>${state === 'pass' ? 'Passed' : 'Needs attention'}</div></div>`).join('');
     notify('System check finished.');
   } catch (error) { notify(error.message); }

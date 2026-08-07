@@ -2,6 +2,7 @@
 set -eu
 
 source_dir=${1:-}
+site_id=${2:-}
 target_dir=/opt/aquaos-services
 credentials=/root/aquaos-services-credentials.txt
 
@@ -9,10 +10,11 @@ if [ "$(id -u)" -ne 0 ]; then
   echo "run this installer with sudo" >&2
   exit 1
 fi
-if [ -z "$source_dir" ] || [ ! -f "$source_dir/compose.yaml" ] || [ ! -f "$source_dir/.env.example" ]; then
+if [ -z "$source_dir" ] || [ -z "$site_id" ] || [ ! -f "$source_dir/compose.yaml" ] || [ ! -f "$source_dir/.env.example" ]; then
   echo "a complete optional-services source directory is required" >&2
   exit 1
 fi
+case "$site_id" in *[!a-z0-9-]*|'') echo "site ID must contain lowercase letters, digits, and hyphens" >&2; exit 1;; esac
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
@@ -22,6 +24,8 @@ systemctl enable --now docker
 install -d -m 0750 "$target_dir"
 cp -R "$source_dir/." "$target_dir/"
 cd "$target_dir"
+sed "s#home-reef#$site_id#g" mosquitto/config/acl > mosquitto/config/acl.runtime
+mv mosquitto/config/acl.runtime mosquitto/config/acl
 
 if [ ! -f .env ]; then
   influx_password=$(openssl rand -hex 24)
@@ -57,7 +61,10 @@ if [ ! -f mosquitto/config/passwd ]; then
   } > "$credentials"
 fi
 
-docker compose config --quiet
-docker compose up -d mosquitto influxdb grafana
-docker compose ps
+compose() {
+  if docker compose version >/dev/null 2>&1; then docker compose "$@"; else docker-compose "$@"; fi
+}
+compose config --quiet
+compose up -d mosquitto influxdb grafana
+compose ps
 echo "Optional services installed. Root-only credentials: $credentials"

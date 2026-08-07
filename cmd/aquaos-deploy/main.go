@@ -69,7 +69,7 @@ func initialize(arguments []string, stdin io.Reader, stdout, stderr io.Writer) i
 		address := ask(role+" VM reserved IP address", "")
 		return deployment.Guest{VMID: integer(role+" unused VM ID", id), Name: ask(role+" VM name", name), Address: address, CIDR: ask(role+" VM address with prefix", address+"/24"), Gateway: ask(role+" VM gateway", ""), Cores: integer(role+" CPU cores", cores), MemoryMiB: integer(role+" memory MiB", memory), DiskGiB: integer(role+" disk GiB", disk)}
 	}
-	cfg := deployment.Config{Proxmox: proxmox, Control: guest("Control", "aquaos-control", 200, 2, 4096, 32), Services: guest("Services", "aquaos-services", 201, 4, 8192, 80), HomeAssistant: guest("Home Assistant", "home-assistant", 202, 2, 4096, 32), Release: deployment.Release{Directory: ask("Signed AquaOS release directory", "dist"), Version: ask("AquaOS release version", ""), SHA256: ask("AquaOS Core SHA-256", "")}, RepositoryDirectory: ask("AquaOS repository directory", ".")}
+	cfg := deployment.Config{SiteID: ask("Aquarium site ID", "home-reef"), Proxmox: proxmox, Control: guest("Control", "aquaos-control", 200, 2, 4096, 32), Services: guest("Services", "aquaos-services", 201, 4, 8192, 80), HomeAssistant: guest("Home Assistant", "home-assistant", 202, 2, 4096, 32), Release: deployment.Release{Directory: ask("Signed AquaOS release directory", "dist"), Version: ask("AquaOS release version", ""), SHA256: ask("AquaOS Core SHA-256", "")}, RepositoryDirectory: ask("AquaOS repository directory", ".")}
 	payload, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, err)

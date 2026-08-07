@@ -53,6 +53,30 @@ func TestNodeREDIsDefinedOnlyAsAnAdvancedAddOn(t *testing.T) {
 	}
 }
 
+func TestApplianceKeepsHomeAssistantOptionalAndBounded(t *testing.T) {
+	payload, err := os.ReadFile("../../infrastructure/docker/compose.appliance.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document struct {
+		Services map[string]struct {
+			NetworkMode string `yaml:"network_mode"`
+			Memory      string `yaml:"mem_limit"`
+			PIDs        int    `yaml:"pids_limit"`
+		} `yaml:"services"`
+	}
+	if err = yaml.Unmarshal(payload, &document); err != nil {
+		t.Fatal(err)
+	}
+	homeAssistant, exists := document.Services["homeassistant"]
+	if !exists || homeAssistant.NetworkMode != "host" || homeAssistant.Memory == "" || homeAssistant.PIDs < 1 {
+		t.Fatalf("Home Assistant appliance bounds are incomplete: %+v", homeAssistant)
+	}
+	if _, exists = document.Services["aquaos"]; exists {
+		t.Fatal("AquaOS Core must not be containerized")
+	}
+}
+
 func TestProvisionedDashboardUsesVersionedStorageMeasurements(t *testing.T) {
 	payload, err := os.ReadFile("../../infrastructure/docker/grafana/provisioning/dashboards/json/aquaos-overview.json")
 	if err != nil {

@@ -17,6 +17,9 @@ repository is **not release-ready** while any required row is pending.
 | Process restart and Control VM reboot | systemd journal and state comparison | pending |
 | Proxmox VM stop/start and host maintenance | timestamps, alarms, recovery state | pending |
 | Clean VM install and automatic startup | signed artifact digest and journal | pending |
+| Clean dedicated-appliance install | dry-run/apply log, signed artifact digests, browser onboarding | tooling complete; physical run pending |
+| Optional-container outage on appliance | `verify-appliance-isolation.sh` evidence | automated tool available; target-host run pending |
+| Home Assistant dashboard and local notification | retained MQTT observation, screenshot, notification timestamp | contract tests PASS; live HA pending |
 | Replacement-host restore | new-host record and checksum evidence | pending |
 | 72-hour lamp-load soak | resource samples, commands, faults, final relay state | pending |
 

@@ -1,0 +1,70 @@
+schema_version: 1
+application:
+  log_level: info
+  startup_timeout: 30s
+  shutdown_timeout: 15s
+  component_timeout: 5s
+  event_concurrency: 64
+http:
+  address: "localhost:8080"
+  read_timeout: 5s
+  write_timeout: 10s
+  idle_timeout: 60s
+  bearer_token_file: "/etc/aquaos/secrets/api.token"
+  maximum_request_bytes: 65536
+  mutation_rate: 10
+  mutation_burst: 20
+mqtt:
+  enabled: true
+  site_id: home-reef
+  broker: tcp://localhost:1883
+  client_id: aquaos
+  connect_timeout: 10s
+  keep_alive: 30s
+  disconnect_quiesce: 250ms
+  required_for_ready: false
+  maximum_payload: 262144
+  queue_capacity: 256
+  idempotency_capacity: 4096
+  reconnect_minimum: 1s
+  reconnect_maximum: 1m
+  reconnect_jitter: 0.2
+  home_assistant:
+    enabled: true
+    command_ttl: 10s
+    tombstones: []
+simulator:
+  enabled: true
+adapters:
+  shelly:
+    enabled: false
+    endpoints: []
+  esp32:
+    enabled: false
+    endpoints: []
+bench:
+  enabled: false
+  safe_load_acknowledged: false
+storage:
+  influxdb:
+    enabled: true
+    url: "http://localhost:8086"
+    organization: aquaos
+    bucket: telemetry
+    token_file: "/etc/aquaos/secrets/influx.token"
+    queue_capacity: 4096
+    batch_size: 200
+    flush_interval: 5s
+    retry_minimum: 1s
+    retry_maximum: 1m
+    write_timeout: 5s
+inventory:
+  devices: []
+  sensors: []
+  equipment: []
+alarms:
+  rules: []
+backups:
+  enabled: false
+  destination: ""
+  retention_days: 30
