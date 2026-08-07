@@ -13,4 +13,7 @@ Enable `storage.influxdb.enabled` only after setting the URL, organization, buck
 
 Stable bounded tags include entity identity, quantity, canonical unit, event type, status, reason code, severity, source component, and subject kind. High-cardinality causal IDs and free text are fields. Never add credentials, URLs containing credentials, raw arbitrary metadata, error text, or correlation IDs as tags.
 
-Example Grafana provisioning is under `deploy/grafana`. It expects an existing InfluxDB datasource configured through environment variables. These assets are not installed in the Control VM critical path.
+Example Grafana provisioning is under
+`infrastructure/docker/grafana/provisioning`. It expects the separate services
+stack's InfluxDB datasource configured through environment variables. These
+assets are not installed in the Control VM critical path.

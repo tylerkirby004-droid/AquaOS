@@ -95,6 +95,9 @@ func New(cfg config.Config, configPath string, logger *slog.Logger, supplied ...
 	deviceRegistry := devices.NewRegistry(eventBus)
 	sensorManager := sensors.NewRegistry(eventBus, deviceRegistry)
 	equipmentManager := equipment.NewRegistry(eventBus, deviceRegistry)
+	if err := registerAdapterInventory(context.Background(), cfg, deviceRegistry, sensorManager, equipmentManager); err != nil {
+		return nil, fmt.Errorf("register configured adapter inventory: %w", err)
+	}
 	stateManager := state.NewManager(eventBus)
 	alarmManager := alarms.NewManager(eventBus, logger.With("component", "alarms"))
 	profiles := make([]equipment.Profile, 0, len(cfg.Adapters.Shelly.Endpoints))
@@ -282,6 +285,42 @@ func New(cfg config.Config, configPath string, logger *slog.Logger, supplied ...
 		}, components...), Simulator: simulatorAdapter,
 		Shelly: shellyAdapter, ESP32: esp32Adapter, Bench: benchCoordinator, HomeAssistant: homeAssistant,
 	}, nil
+}
+
+// registerAdapterInventory creates REST and discovery identities from validated
+// adapter ownership without opening connections or starting hardware work.
+func registerAdapterInventory(ctx context.Context, cfg config.Config, deviceRegistry *devices.Registry, sensorRegistry *sensors.Registry, equipmentRegistry *equipment.Registry) error {
+	for _, configured := range cfg.Adapters.Shelly.Endpoints {
+		capabilities := []domain.Capability{domain.CapabilitySwitch, domain.CapabilityCommandAcknowledgement, domain.CapabilityReportedState, domain.CapabilityPowerTelemetry}
+		deviceID := domain.DeviceID(configured.ID)
+		endpointID := domain.EndpointID(configured.ID)
+		if _, err := deviceRegistry.Register(ctx, domain.Device{ID: deviceID, Name: "Shelly " + configured.EquipmentKind, Capabilities: capabilities, Metadata: map[string]string{"adapter": "shelly", "equipmentKind": configured.EquipmentKind}}); err != nil {
+			return err
+		}
+		if _, err := deviceRegistry.RegisterEndpoint(ctx, domain.Endpoint{ID: endpointID, DeviceID: deviceID, Name: "Shelly channel", Capabilities: capabilities}); err != nil {
+			return err
+		}
+		if _, err := equipmentRegistry.Register(ctx, domain.Equipment{ID: domain.EquipmentID(configured.EquipmentID), DeviceID: deviceID, EndpointID: endpointID, Name: configured.EquipmentKind, Capabilities: capabilities, Metadata: map[string]string{"adapter": "shelly"}}); err != nil {
+			return err
+		}
+	}
+	for _, configured := range cfg.Adapters.ESP32.Endpoints {
+		capabilities := []domain.Capability{domain.CapabilityObserve}
+		deviceID := domain.DeviceID(configured.DeviceID)
+		endpointID := domain.EndpointID(configured.ID)
+		if _, err := deviceRegistry.Register(ctx, domain.Device{ID: deviceID, Name: "ESP32 sensor node", Capabilities: capabilities, Metadata: map[string]string{"adapter": "esp32"}}); err != nil {
+			return err
+		}
+		if _, err := deviceRegistry.RegisterEndpoint(ctx, domain.Endpoint{ID: endpointID, DeviceID: deviceID, Name: "ESP32 dual-probe endpoint", Capabilities: capabilities}); err != nil {
+			return err
+		}
+		for index, probeID := range configured.ProbeIDs {
+			if _, err := sensorRegistry.Register(ctx, domain.Sensor{ID: domain.SensorID(probeID), DeviceID: deviceID, EndpointID: endpointID, Name: fmt.Sprintf("Temperature probe %d", index+1), Quantity: domain.QuantityTemperature, Unit: domain.UnitCelsius, Capabilities: capabilities, Metadata: map[string]string{"adapter": "esp32"}}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func readSecretFile(path string) (string, error) {

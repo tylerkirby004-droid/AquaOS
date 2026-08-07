@@ -121,6 +121,11 @@ packaging. AquaOS is still not v1.0: physical and 72-hour evidence remains
 release-blocking. See [docs/easy-test.md](docs/easy-test.md) for the shortest
 safe evaluation path.
 
+For the complete component-by-component deployment—including the Control VM,
+Core, recovery tools, optional services, Home Assistant, Grafana, Admin GUI,
+hardware bench, display kiosk, backups, and acceptance checks—follow the
+[complete installation guide](docs/installation.md).
+
 ## Safe development startup
 
 Requirements:

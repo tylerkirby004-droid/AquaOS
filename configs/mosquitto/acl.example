@@ -13,10 +13,13 @@ topic write aquaos/home-reef/v1/equipment/+/desired
 topic write aquaos/home-reef/v1/commands/+/result
 topic write aquaos/home-reef/v1/alarms/+/state
 topic write aquaos/home-reef/v1/events/+
+topic write homeassistant/+/+/config
 
 user home-assistant
 topic read  aquaos/home-reef/v1/#
 topic write aquaos/home-reef/v1/commands/+/request
+topic read  homeassistant/#
+topic write homeassistant/status
 
 user aquaos-vision
 topic read  aquaos/home-reef/v1/sensors/+/state

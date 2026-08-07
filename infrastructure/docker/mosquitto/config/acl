@@ -1,8 +1,24 @@
-# Create named users and replace this starter ACL before deploying.
-user reefpi
-topic readwrite aquaos/home/reef/#
+# AquaOS v1 least-privilege example for site ID home-reef.
+user aquaos-core
+topic read  aquaos/home-reef/v1/commands/+/request
+topic read  aquaos/home-reef/v1/ai/+/observations/+
+topic write aquaos/home-reef/v1/system/core/status
+topic write aquaos/home-reef/v1/system/core/availability
+topic write aquaos/home-reef/v1/sensors/+/state
+topic write aquaos/home-reef/v1/equipment/+/reported
+topic write aquaos/home-reef/v1/equipment/+/desired
+topic write aquaos/home-reef/v1/commands/+/result
+topic write aquaos/home-reef/v1/alarms/+/state
+topic write aquaos/home-reef/v1/events/+
+topic write homeassistant/+/+/config
 
-user services
-topic read aquaos/#
-topic write aquaos/home/reef/command/#
-topic write aquaos/home/reef/analysis/#
+user home-assistant
+topic read  aquaos/home-reef/v1/#
+topic write aquaos/home-reef/v1/commands/+/request
+topic read  homeassistant/#
+topic write homeassistant/status
+
+user aquaos-vision
+topic read  aquaos/home-reef/v1/sensors/+/state
+topic read  aquaos/home-reef/v1/events/+
+topic write aquaos/home-reef/v1/ai/vision/observations/+

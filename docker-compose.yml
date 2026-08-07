@@ -6,13 +6,8 @@ services:
     build: .
     restart: unless-stopped
     environment:
-      AQUAOS_HTTP_ADDRESS: ":8080"
-      AQUAOS_MQTT_BROKER: tcp://mosquitto:1883
+      AQUAOS_HTTP_ADDRESS: "localhost:8080"
       AQUAOS_MQTT_ENABLED: "false"
-      AQUAOS_MQTT_USERNAME: ${MQTT_AQUAOS_USERNAME:-}
-      AQUAOS_MQTT_PASSWORD: ${MQTT_AQUAOS_PASSWORD:-}
-    ports:
-      - "8080:8080"
     healthcheck:
       test: ["CMD", "/usr/local/bin/healthcheck", "-url", "http://localhost:8080/health/ready"]
       interval: 30s
@@ -22,6 +17,7 @@ services:
   mosquitto:
     image: eclipse-mosquitto:2
     restart: unless-stopped
+    profiles: ["mqtt"]
     ports:
       - "1883:1883"
     volumes:

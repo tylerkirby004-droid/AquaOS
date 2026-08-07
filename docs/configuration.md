@@ -87,9 +87,12 @@ stable internal code. IDs use lowercase letters, digits, and hyphens. Device
 references must resolve, configured units must be canonical, ranges must be
 finite and ordered, and IDs must be unique within their registry.
 
-The inventory section validates deploy-time identity references. Runtime
-registration uses the Prompt 3 typed domain and ownership contracts; automatic
-activation of configuration inventory remains an orchestration concern.
+The inventory section validates deploy-time identity references. At composition
+time, enabled Shelly and ESP32 endpoints create their adapter-owned typed
+devices, endpoints, equipment, and dual temperature probes before REST or Home
+Assistant starts. Generic declarative inventory without an enabled adapter
+remains reserved for the plugin that owns its endpoint and is not fabricated as
+runtime hardware.
 
 ## Reload policy
 

@@ -70,6 +70,10 @@ func TestBenchAdaptersIngestDirectLANStateWithoutMQTT(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	registeredSensors, err := container.Sensors.List(context.Background())
+	if err != nil || len(registeredSensors) != 2 {
+		t.Fatalf("configured ESP32 probes were not registered: %v %+v", err, registeredSensors)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	if err := container.Lifecycle.Start(ctx); err != nil {
 		cancel()
@@ -133,6 +137,14 @@ func TestNewComposesExplicitBenchAdaptersWithoutMQTT(t *testing.T) {
 	}
 	if container.Shelly == nil || container.Bench == nil || container.OutputRouter == nil {
 		t.Fatal("bench adapter graph was not composed")
+	}
+	registeredDevices, listErr := container.Devices.List(context.Background())
+	if listErr != nil || len(registeredDevices) != 1 {
+		t.Fatalf("configured adapter devices were not registered: %v %+v", listErr, registeredDevices)
+	}
+	registeredEquipment, listErr := container.Equipment.List(context.Background())
+	if listErr != nil || len(registeredEquipment) != 1 {
+		t.Fatalf("configured adapter equipment was not registered: %v %+v", listErr, registeredEquipment)
 	}
 	if container.MQTT != nil {
 		t.Fatal("bench adapter unexpectedly depends on MQTT")

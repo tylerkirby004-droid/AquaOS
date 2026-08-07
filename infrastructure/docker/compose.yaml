@@ -27,7 +27,7 @@ services:
       - influxdb-config:/etc/influxdb2
 
   grafana:
-    image: grafana/grafana-oss:latest
+    image: grafana/grafana-oss:13.1
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -44,7 +44,7 @@ services:
       - influxdb
 
   nodered:
-    image: nodered/node-red:latest
+    image: nodered/node-red:5.0
     restart: unless-stopped
     ports:
       - "1880:1880"
@@ -53,29 +53,7 @@ services:
     depends_on:
       - mosquitto
       - influxdb
-
-  telegraf:
-    image: telegraf:1.31-alpine
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      MQTT_USERNAME: ${MQTT_REEFPI_USERNAME}
-      MQTT_PASSWORD: ${MQTT_REEFPI_PASSWORD}
-    volumes:
-      - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
-    depends_on:
-      - mosquitto
-      - influxdb
-
-  telemetry-simulator:
-    build: ./simulator
-    restart: unless-stopped
-    environment:
-      MQTT_HOST: mosquitto
-      MQTT_USERNAME: ${MQTT_REEFPI_USERNAME}
-      MQTT_PASSWORD: ${MQTT_REEFPI_PASSWORD}
-    depends_on:
-      - mosquitto
+    profiles: ["nodered"]
 
 volumes:
   mosquitto-data:

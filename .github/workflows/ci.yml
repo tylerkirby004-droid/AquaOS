@@ -25,6 +25,12 @@ jobs:
           cache-dependency-path: aquaos-vision/pyproject.toml
       - name: Formatting
         run: test -z "$(gofmt -l ./cmd ./internal ./pkg)"
+      - name: Installation assets
+        run: |
+          sh -n scripts/*.sh
+          cp infrastructure/docker/.env.example infrastructure/docker/.env
+          docker compose -f docker-compose.yml config --quiet
+          docker compose -f infrastructure/docker/compose.yaml config --quiet
       - name: Vet
         run: go vet ./...
       - name: Staticcheck
