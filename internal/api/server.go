@@ -32,18 +32,47 @@ type Server struct {
 	done             chan struct{}
 	cancellationDone chan struct{}
 	shutdownTimeout  time.Duration
+	authenticator    Authenticator
+	authorizer       Authorizer
+	dependencies     Dependencies
+	maximumBodyBytes int64
+	mutations        *rateLimiter
+	startedAt        time.Time
+}
+
+// Option supplies an optional API boundary dependency.
+type Option func(*Server)
+
+// WithDependencies connects handlers to application and query services.
+func WithDependencies(dependencies Dependencies) Option {
+	return func(server *Server) { server.dependencies = dependencies }
+}
+
+// WithSecurity installs explicit authentication and authorization boundaries.
+func WithSecurity(authenticator Authenticator, authorizer Authorizer) Option {
+	return func(server *Server) {
+		if authenticator != nil {
+			server.authenticator = authenticator
+		}
+		if authorizer != nil {
+			server.authorizer = authorizer
+		}
+	}
 }
 
 // New constructs an HTTP server from external configuration and dependencies.
-func New(cfg config.HTTP, manager *health.Manager, logger *slog.Logger) *Server {
-	s := &Server{health: manager, logger: logger, shutdownTimeout: cfg.WriteTimeout}
+func New(cfg config.HTTP, manager *health.Manager, logger *slog.Logger, options ...Option) *Server {
+	s := &Server{health: manager, logger: logger, shutdownTimeout: cfg.WriteTimeout, authenticator: denyAuthenticator{}, authorizer: roleAuthorizer{}, maximumBodyBytes: cfg.MaximumRequestBytes, mutations: newRateLimiter(cfg.MutationRate, cfg.MutationBurst), startedAt: time.Now().UTC()}
+	for _, option := range options {
+		option(s)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health/live", s.live)
 	mux.HandleFunc("GET /health/ready", s.ready)
 	mux.HandleFunc("GET /healthz", s.live)
 	mux.HandleFunc("GET /readyz", s.ready)
-	mux.HandleFunc("GET /api/v1/health", s.details)
-	s.server = &http.Server{Addr: cfg.Address, Handler: mux, ReadTimeout: cfg.ReadTimeout, WriteTimeout: cfg.WriteTimeout, IdleTimeout: cfg.IdleTimeout, ReadHeaderTimeout: cfg.ReadTimeout}
+	s.registerV1(mux)
+	s.server = &http.Server{Addr: cfg.Address, Handler: s.withCorrelation(mux), ReadTimeout: cfg.ReadTimeout, WriteTimeout: cfg.WriteTimeout, IdleTimeout: cfg.IdleTimeout, ReadHeaderTimeout: cfg.ReadTimeout, MaxHeaderBytes: 32 * 1024}
 	return s
 }
 
@@ -160,7 +189,7 @@ func (s *Server) details(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, s.health.Report())
 }
 func writeJSON(w http.ResponseWriter, code int, value any) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(value)
 }

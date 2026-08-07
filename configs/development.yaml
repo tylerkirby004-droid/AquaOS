@@ -13,6 +13,10 @@ http:
   read_timeout: 2s
   write_timeout: 2s
   idle_timeout: 10s
+  bearer_token_file: ""
+  maximum_request_bytes: 65536
+  mutation_rate: 10
+  mutation_burst: 20
 
 mqtt:
   # The foundation verification must succeed without a broker.

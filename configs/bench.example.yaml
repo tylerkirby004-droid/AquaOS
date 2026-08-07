@@ -12,6 +12,10 @@ http:
   read_timeout: 5s
   write_timeout: 10s
   idle_timeout: 60s
+  bearer_token_file: ""
+  maximum_request_bytes: 65536
+  mutation_rate: 10
+  mutation_burst: 20
 
 mqtt:
   enabled: false

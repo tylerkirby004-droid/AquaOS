@@ -121,7 +121,19 @@ func New(cfg config.Config, configPath string, logger *slog.Logger, supplied ...
 		return nil, fmt.Errorf("construct output service: %w", err)
 	}
 	storageManager := subsystem.NewPassive("storage")
-	apiServer := api.New(cfg.HTTP, healthManager, logger.With("component", "api"))
+	apiOptions := []api.Option{api.WithDependencies(api.Dependencies{Devices: deviceRegistry, Sensors: sensorManager, Equipment: equipmentManager, State: stateManager, Commands: outputService, Alarms: alarmManager, Configuration: configurationManager})}
+	if cfg.HTTP.BearerTokenFile != "" {
+		token, tokenErr := readSecretFile(cfg.HTTP.BearerTokenFile)
+		if tokenErr != nil {
+			return nil, fmt.Errorf("construct API credentials: %w", tokenErr)
+		}
+		authenticator, authErr := api.NewBearerAuthenticator(token, api.Principal{ID: "local-administrator", Roles: []api.Role{api.RoleAdministrator}})
+		if authErr != nil {
+			return nil, fmt.Errorf("construct API authenticator: %w", authErr)
+		}
+		apiOptions = append(apiOptions, api.WithSecurity(authenticator, nil))
+	}
+	apiServer := api.New(cfg.HTTP, healthManager, logger.With("component", "api"), apiOptions...)
 
 	var shellyAdapter *shelly.Adapter
 	var esp32Adapter *esp32.Adapter

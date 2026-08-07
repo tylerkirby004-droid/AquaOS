@@ -20,7 +20,9 @@ criteria. Work proceeds in order and stops when a required gate lacks evidence.
 8. v0.6 Shelly and ESP32 bench — direct-LAN adapters and safe lamp-load evidence
    from the dedicated Control VM. Software boundaries and fake-LAN contracts are
    implemented; physical Control VM/lamp-load evidence remains required.
-9. v0.7 Integrations — REST v1, Home Assistant, optional InfluxDB/Grafana.
+9. v0.7 Integrations — REST v1 is implemented with authentication, bounded
+   requests, application-service-only mutations, redacted diagnostics, and an
+   OpenAPI contract. Home Assistant and optional InfluxDB/Grafana follow.
 10. v0.8 Operations beta — guided installation, Admin GUI, and multi-server
     operations.
 11. v0.9 Release candidate — hardening, matrix tests, and 72-hour soak.

@@ -98,6 +98,10 @@ uses the simulator and rejecting output router. See
 [docs/esp32-node-protocol.md](docs/esp32-node-protocol.md). Physical bench
 evidence is required before Prompt 8 can be declared complete.
 
+Prompt 9 adds the authenticated, versioned REST boundary used by integrations
+and the future non-authoritative Admin GUI. See [docs/rest-api.md](docs/rest-api.md)
+and [docs/openapi-v1.yaml](docs/openapi-v1.yaml).
+
 ## Safe development startup
 
 Requirements:

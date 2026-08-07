@@ -16,6 +16,15 @@ Omitted optional values receive broker-independent defaults: MQTT disabled,
 the hardware-incapable simulator enabled, HTTP bound to `localhost`, bounded
 timeouts, and no inventory. Defaults cannot activate physical equipment.
 
+## HTTP API controls
+
+All `/api/v1` routes require bearer authentication; only process liveness and
+compatibility probes remain unauthenticated. `http.bearer_token_file` names an
+external credential file and is mandatory for a non-loopback listener.
+`maximum_request_bytes`, `mutation_rate`, and `mutation_burst` bound untrusted
+HTTP work. Credentials are loaded during startup and are never returned or
+included in the redacted configuration digest.
+
 ## Overrides and secrets
 
 The supported overrides are `AQUAOS_LOG_LEVEL`, `AQUAOS_HTTP_ADDRESS`,

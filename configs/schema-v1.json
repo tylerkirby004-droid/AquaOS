@@ -25,7 +25,11 @@
         "address": { "type": "string", "minLength": 1 },
         "read_timeout": { "type": "string" },
         "write_timeout": { "type": "string" },
-        "idle_timeout": { "type": "string" }
+        "idle_timeout": { "type": "string" },
+        "bearer_token_file": { "type": "string" },
+        "maximum_request_bytes": { "type": "integer", "minimum": 1024, "maximum": 1048576 },
+        "mutation_rate": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "mutation_burst": { "type": "integer", "minimum": 1, "maximum": 1000 }
       }
     },
     "mqtt": {

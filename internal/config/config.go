@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net"
 	"net/url"
 	"os"
 	"regexp"
@@ -53,10 +54,14 @@ type Application struct {
 
 // HTTP contains REST server listener and timeout configuration.
 type HTTP struct {
-	Address      string        `yaml:"address" json:"address"`
-	ReadTimeout  time.Duration `yaml:"read_timeout" json:"readTimeout"`
-	WriteTimeout time.Duration `yaml:"write_timeout" json:"writeTimeout"`
-	IdleTimeout  time.Duration `yaml:"idle_timeout" json:"idleTimeout"`
+	Address             string        `yaml:"address" json:"address"`
+	ReadTimeout         time.Duration `yaml:"read_timeout" json:"readTimeout"`
+	WriteTimeout        time.Duration `yaml:"write_timeout" json:"writeTimeout"`
+	IdleTimeout         time.Duration `yaml:"idle_timeout" json:"idleTimeout"`
+	BearerTokenFile     string        `yaml:"bearer_token_file" json:"-"`
+	MaximumRequestBytes int64         `yaml:"maximum_request_bytes" json:"maximumRequestBytes"`
+	MutationRate        int           `yaml:"mutation_rate" json:"mutationRate"`
+	MutationBurst       int           `yaml:"mutation_burst" json:"mutationBurst"`
 }
 
 // MQTT contains broker connection configuration; it contains no topic policy.
@@ -185,7 +190,7 @@ func Defaults() Config {
 	return Config{
 		SchemaVersion: CurrentSchemaVersion,
 		Application:   Application{LogLevel: "info", StartupTimeout: 30 * time.Second, ShutdownTimeout: 15 * time.Second, ComponentTimeout: 5 * time.Second, EventConcurrency: 64},
-		HTTP:          HTTP{Address: "localhost:8080", ReadTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second},
+		HTTP:          HTTP{Address: "localhost:8080", ReadTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second, MaximumRequestBytes: 64 * 1024, MutationRate: 10, MutationBurst: 20},
 		MQTT:          MQTT{ConnectTimeout: 10 * time.Second, KeepAlive: 30 * time.Second, DisconnectQuiesce: 250 * time.Millisecond, MaximumPayload: 256 * 1024, QueueCapacity: 256, IdempotencyCapacity: 4096, ReconnectMinimum: time.Second, ReconnectMaximum: time.Minute, ReconnectJitter: 0.2},
 		Simulator:     Simulator{Enabled: true},
 	}
@@ -221,6 +226,39 @@ func Load(path string) (Config, error) {
 	}
 	if err := applyEnvironment(&cfg); err != nil {
 		return Config{}, err
+	}
+	if err := cfg.Validate(); err != nil {
+		return Config{}, err
+	}
+	return cfg.Clone(), nil
+}
+
+// DecodeCandidate strictly decodes and validates an untrusted candidate
+// configuration without applying environment overrides or activating it.
+func DecodeCandidate(data []byte) (Config, error) {
+	if len(data) == 0 {
+		return Config{}, errors.New("candidate configuration is empty")
+	}
+	if len(data) > 1024*1024 {
+		return Config{}, errors.New("candidate configuration exceeds 1048576 bytes")
+	}
+	var envelope struct {
+		SchemaVersion *int `yaml:"schema_version"`
+	}
+	if err := yaml.Unmarshal(data, &envelope); err != nil {
+		return Config{}, fmt.Errorf("decode candidate config: %w", err)
+	}
+	if envelope.SchemaVersion == nil {
+		return Config{}, validationError("schema_version", "required", "is required")
+	}
+	cfg := Defaults()
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&cfg); err != nil {
+		return Config{}, fmt.Errorf("decode candidate config: %w", err)
+	}
+	if cfg.MQTT.Password != "" {
+		return Config{}, validationError("mqtt.password", "secret_inline", "must not be supplied in candidate configuration")
 	}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
@@ -283,6 +321,21 @@ func (c Config) Validate() error {
 	}
 	if strings.TrimSpace(c.HTTP.Address) == "" {
 		return validationError("http.address", "required", "is required")
+	}
+	host, _, err := net.SplitHostPort(c.HTTP.Address)
+	if err != nil {
+		return validationError("http.address", "invalid_address", "must contain a host and port")
+	}
+	ip := net.ParseIP(host)
+	loopback := host == "localhost" || (ip != nil && ip.IsLoopback())
+	if !loopback && c.HTTP.BearerTokenFile == "" {
+		return validationError("http.bearer_token_file", "required", "is required for a non-loopback listener")
+	}
+	if c.HTTP.MaximumRequestBytes < 1024 || c.HTTP.MaximumRequestBytes > 1024*1024 {
+		return validationError("http.maximum_request_bytes", "out_of_range", "must be between 1024 and 1048576")
+	}
+	if c.HTTP.MutationRate < 1 || c.HTTP.MutationRate > 1000 || c.HTTP.MutationBurst < 1 || c.HTTP.MutationBurst > 1000 {
+		return validationError("http.mutation_rate", "out_of_range", "mutation rate and burst must be between 1 and 1000")
 	}
 	if c.Application.EventConcurrency < 1 || c.Application.EventConcurrency > 4096 {
 		return validationError("application.event_concurrency", "out_of_range", "must be between 1 and 4096")

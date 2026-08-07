@@ -119,6 +119,25 @@ func TestValidateAllowsBrokerFreeSafeDefaults(t *testing.T) {
 	}
 }
 
+func TestNonLoopbackHTTPRequiresExternalCredential(t *testing.T) {
+	cfg := Defaults()
+	cfg.HTTP.Address = "0.0.0.0:8080"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("non-loopback listener without credentials validated")
+	}
+	cfg.HTTP.BearerTokenFile = "/etc/aquaos/secrets/api.token"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("credentialed listener: %v", err)
+	}
+}
+
+func TestDecodeCandidateRejectsInlineSecret(t *testing.T) {
+	payload := []byte("schema_version: 1\nmqtt:\n  password: forbidden\n")
+	if _, err := DecodeCandidate(payload); err == nil {
+		t.Fatal("candidate inline secret was accepted")
+	}
+}
+
 func TestDigestIsStableAndSecretIndependent(t *testing.T) {
 	cfg := Defaults()
 	cfg.MQTT.Password = "one"

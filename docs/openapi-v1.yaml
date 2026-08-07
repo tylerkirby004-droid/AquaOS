@@ -1,0 +1,50 @@
+openapi: 3.1.0
+info:
+  title: AquaOS REST API
+  version: 1.0.0
+  description: Authoritative, authenticated AquaOS Core API. Mutations pass through application services and safety policy.
+servers:
+  - url: /api/v1
+paths:
+  /health:
+    get: { operationId: getHealth, responses: { "200": { description: Aggregate health } } }
+  /system:
+    get: { operationId: getSystem, security: [bearerAuth: []], responses: { "200": { description: Redacted system information } } }
+  /devices:
+    get: { operationId: listDevices, security: [bearerAuth: []], responses: { "200": { description: Device page } } }
+  /devices/{id}:
+    get: { operationId: getDevice, security: [bearerAuth: []], parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: Device } } }
+  /state:
+    get: { operationId: getState, security: [bearerAuth: []], responses: { "200": { description: Canonical state } } }
+  /sensors/{id}/state:
+    get: { operationId: getSensorState, security: [bearerAuth: []], parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: Sensor state } } }
+  /equipment/{id}/state:
+    get: { operationId: getEquipmentState, security: [bearerAuth: []], parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: Equipment state } } }
+  /equipment/{id}/commands:
+    post: { operationId: submitCommand, security: [bearerAuth: []], parameters: [{ $ref: "#/components/parameters/id" }, { $ref: "#/components/parameters/idempotencyKey" }], responses: { "202": { description: Command accepted }, "409": { $ref: "#/components/responses/Problem" } } }
+  /commands/{id}:
+    get: { operationId: getCommand, security: [bearerAuth: []], parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: Command result } } }
+  /alarms:
+    get: { operationId: listAlarms, security: [bearerAuth: []], responses: { "200": { description: Alarm page } } }
+  /alarms/{id}/ack:
+    post: { operationId: acknowledgeAlarm, security: [bearerAuth: []], parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: Acknowledged alarm }, "409": { $ref: "#/components/responses/Problem" } } }
+  /config/validate:
+    post: { operationId: validateConfig, security: [bearerAuth: []], responses: { "200": { description: Candidate validation and activation plan } } }
+  /config/reload:
+    post: { operationId: reloadConfig, security: [bearerAuth: []], responses: { "200": { description: Atomic reload result } } }
+  /diagnostics:
+    get: { operationId: getDiagnostics, security: [bearerAuth: []], responses: { "200": { description: Redacted diagnostics } } }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer }
+  parameters:
+    id: { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    idempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 1, maxLength: 128 } }
+  responses:
+    Problem:
+      description: RFC 9457-compatible problem response
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            required: [type, title, status, code, correlationId]
