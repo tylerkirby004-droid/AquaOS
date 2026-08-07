@@ -1,0 +1,380 @@
+// Package admin provides the non-authoritative recovery and deployment GUI.
+// Every mutation calls the same operations application service as aquaosctl.
+package admin
+
+import (
+	"context"
+	"crypto/ed25519"
+	"crypto/subtle"
+	"embed"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"io"
+	"io/fs"
+	"log/slog"
+	"net"
+	"net/http"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/tylerkirby004-droid/aquaos/internal/health"
+	"github.com/tylerkirby004-droid/aquaos/internal/operations"
+)
+
+//go:embed web/*
+var assets embed.FS
+
+// Operations is the Admin GUI-owned application-service contract.
+type Operations interface {
+	GetStatus(context.Context, operations.Actor) (operations.Status, error)
+	Verify(context.Context, operations.Actor) (operations.Diagnostics, error)
+	Repair(context.Context, operations.Actor, bool) (operations.Result, error)
+	Install(context.Context, operations.InstallRequest) (operations.Result, error)
+	Upgrade(context.Context, operations.UpgradeRequest) (operations.Result, error)
+	Rollback(context.Context, operations.Actor, bool) (operations.Result, error)
+	Backup(context.Context, operations.Actor) ([]byte, error)
+	Restore(context.Context, operations.Actor, []byte, bool) (operations.Result, error)
+	Uninstall(context.Context, operations.Actor, bool, bool) (operations.Result, error)
+	ValidateConfiguration(context.Context, operations.Actor, []byte) (operations.ConfigurationResult, error)
+	ApplyConfiguration(context.Context, operations.Actor, []byte, bool) (operations.ConfigurationResult, error)
+}
+
+// Config contains externally supplied listener and request bounds.
+type Config struct {
+	Address             string
+	Token               string
+	MaximumRequestBytes int64
+	ShutdownTimeout     time.Duration
+}
+
+// Server owns the authenticated Admin GUI listener.
+type Server struct {
+	cfg              Config
+	operations       Operations
+	logger           *slog.Logger
+	server           *http.Server
+	mu               sync.RWMutex
+	running          bool
+	serveErr         error
+	cancel           context.CancelFunc
+	done             chan struct{}
+	cancellationDone chan struct{}
+}
+
+// New constructs an Admin GUI server without starting it.
+func New(cfg Config, service Operations, logger *slog.Logger) (*Server, error) {
+	if cfg.Address == "" || cfg.Token == "" || cfg.MaximumRequestBytes < 1024 || cfg.MaximumRequestBytes > 64*1024*1024 || cfg.ShutdownTimeout <= 0 {
+		return nil, errors.New("admin listener, token, and safe bounds are required")
+	}
+	if service == nil || logger == nil {
+		return nil, errors.New("admin operations and logger are required")
+	}
+	web, err := fs.Sub(assets, "web")
+	if err != nil {
+		return nil, err
+	}
+	result := &Server{cfg: cfg, operations: service, logger: logger}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health/live", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, map[string]string{"status": "alive"}) })
+	mux.Handle("GET /admin/", http.StripPrefix("/admin/", http.FileServer(http.FS(web))))
+	mux.Handle("GET /api/status", result.authorize(http.HandlerFunc(result.status)))
+	mux.Handle("POST /api/verify", result.authorize(http.HandlerFunc(result.verify)))
+	mux.Handle("POST /api/repair", result.authorize(http.HandlerFunc(result.repair)))
+	mux.Handle("POST /api/install", result.authorize(http.HandlerFunc(result.install)))
+	mux.Handle("POST /api/upgrade", result.authorize(http.HandlerFunc(result.upgrade)))
+	mux.Handle("POST /api/rollback", result.authorize(http.HandlerFunc(result.rollback)))
+	mux.Handle("GET /api/backup", result.authorize(http.HandlerFunc(result.backup)))
+	mux.Handle("POST /api/restore", result.authorize(http.HandlerFunc(result.restore)))
+	mux.Handle("POST /api/uninstall", result.authorize(http.HandlerFunc(result.uninstall)))
+	mux.Handle("POST /api/config/validate", result.authorize(http.HandlerFunc(result.validateConfiguration)))
+	mux.Handle("POST /api/config/apply", result.authorize(http.HandlerFunc(result.applyConfiguration)))
+	result.server = &http.Server{Addr: cfg.Address, Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
+	return result, nil
+}
+
+// Name returns the component name.
+func (*Server) Name() string { return "admin" }
+
+// Start starts explicitly owned serving work.
+func (s *Server) Start(ctx context.Context) error {
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", s.server.Addr)
+	if err != nil {
+		return err
+	}
+	runCtx, cancel := context.WithCancel(ctx)
+	s.mu.Lock()
+	s.running = true
+	s.cancel = cancel
+	s.done = make(chan struct{})
+	s.cancellationDone = make(chan struct{})
+	done := s.done
+	cancellationDone := s.cancellationDone
+	s.mu.Unlock()
+	go func() {
+		defer close(done)
+		err := s.server.Serve(listener)
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			s.mu.Lock()
+			s.serveErr = err
+			s.running = false
+			s.mu.Unlock()
+		}
+	}()
+	go func() {
+		defer close(cancellationDone)
+		<-runCtx.Done()
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), s.cfg.ShutdownTimeout)
+		defer shutdownCancel()
+		_ = s.server.Shutdown(shutdownCtx)
+	}()
+	return nil
+}
+
+// Stop cancels, shuts down, and joins serving work.
+func (s *Server) Stop(ctx context.Context) error {
+	s.mu.RLock()
+	cancel, done, cancellationDone := s.cancel, s.done, s.cancellationDone
+	s.mu.RUnlock()
+	if cancel != nil {
+		cancel()
+	}
+	err := s.server.Shutdown(ctx)
+	if done != nil {
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return errors.Join(err, ctx.Err())
+		}
+	}
+	if cancellationDone != nil {
+		select {
+		case <-cancellationDone:
+		case <-ctx.Done():
+			return errors.Join(err, ctx.Err())
+		}
+	}
+	s.mu.Lock()
+	s.running = false
+	s.mu.Unlock()
+	return err
+}
+
+// Health reports Admin GUI listener health without affecting Core.
+func (s *Server) Health() health.Status {
+	s.mu.RLock()
+	running, serveErr := s.running, s.serveErr
+	s.mu.RUnlock()
+	state := health.StateUnhealthy
+	message := ""
+	if running && serveErr == nil {
+		state = health.StateHealthy
+	}
+	if serveErr != nil {
+		message = serveErr.Error()
+	}
+	return health.NewStatus(s.Name(), state, message, time.Now().UTC())
+}
+
+func (s *Server) authorize(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		provided := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+		if len(provided) != len(s.cfg.Token) || subtle.ConstantTimeCompare([]byte(provided), []byte(s.cfg.Token)) != 1 {
+			writeProblem(w, 401, "authentication_required", "Valid bearer credentials are required.")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+func actor() operations.Actor { return operations.Actor{ID: "admin-gui", Administrator: true} }
+func (s *Server) status(w http.ResponseWriter, r *http.Request) {
+	value, err := s.operations.GetStatus(r.Context(), actor())
+	respond(w, value, err)
+}
+func (s *Server) verify(w http.ResponseWriter, r *http.Request) {
+	value, err := s.operations.Verify(r.Context(), actor())
+	respond(w, value, err)
+}
+
+type dryRunRequest struct {
+	DryRun bool `json:"dryRun"`
+}
+
+func (s *Server) repair(w http.ResponseWriter, r *http.Request) {
+	var request dryRunRequest
+	if !s.decode(w, r, &request) {
+		return
+	}
+	value, err := s.operations.Repair(r.Context(), actor(), request.DryRun)
+	respond(w, value, err)
+}
+func (s *Server) rollback(w http.ResponseWriter, r *http.Request) {
+	var request dryRunRequest
+	if !s.decode(w, r, &request) {
+		return
+	}
+	value, err := s.operations.Rollback(r.Context(), actor(), request.DryRun)
+	respond(w, value, err)
+}
+
+type installRequest struct {
+	Version               string `json:"version"`
+	Binary                string `json:"binaryBase64"`
+	SHA256                string `json:"sha256"`
+	Signature             string `json:"signatureHex"`
+	PublicKey             string `json:"publicKeyHex"`
+	Configuration         string `json:"configurationBase64"`
+	ControlVMAcknowledged bool   `json:"controlVmAcknowledged"`
+	DryRun                bool   `json:"dryRun"`
+}
+
+func (s *Server) install(w http.ResponseWriter, r *http.Request) {
+	var request installRequest
+	if !s.decode(w, r, &request) {
+		return
+	}
+	binary, signature, key, configuration, err := decodeArtifact(request.Binary, request.Signature, request.PublicKey, request.Configuration)
+	if err != nil {
+		writeProblem(w, 400, "invalid_artifact", err.Error())
+		return
+	}
+	value, err := s.operations.Install(r.Context(), operations.InstallRequest{Actor: actor(), Version: request.Version, Binary: binary, SHA256: request.SHA256, Signature: signature, PublicKey: key, Configuration: configuration, ControlVMAcknowledged: request.ControlVMAcknowledged, DryRun: request.DryRun})
+	respond(w, value, err)
+}
+
+type upgradeRequest struct {
+	Version   string `json:"version"`
+	Binary    string `json:"binaryBase64"`
+	SHA256    string `json:"sha256"`
+	Signature string `json:"signatureHex"`
+	PublicKey string `json:"publicKeyHex"`
+	DryRun    bool   `json:"dryRun"`
+}
+
+func (s *Server) upgrade(w http.ResponseWriter, r *http.Request) {
+	var request upgradeRequest
+	if !s.decode(w, r, &request) {
+		return
+	}
+	binary, signature, key, _, err := decodeArtifact(request.Binary, request.Signature, request.PublicKey, "")
+	if err != nil {
+		writeProblem(w, 400, "invalid_artifact", err.Error())
+		return
+	}
+	value, err := s.operations.Upgrade(r.Context(), operations.UpgradeRequest{Actor: actor(), Version: request.Version, Binary: binary, SHA256: request.SHA256, Signature: signature, PublicKey: key, DryRun: request.DryRun})
+	respond(w, value, err)
+}
+func (s *Server) backup(w http.ResponseWriter, r *http.Request) {
+	payload, err := s.operations.Backup(r.Context(), actor())
+	if err != nil {
+		writeProblem(w, 400, "operation_failed", err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", "attachment; filename=aquaos-backup.zip")
+	w.WriteHeader(200)
+	_, _ = w.Write(payload)
+}
+func (s *Server) restore(w http.ResponseWriter, r *http.Request) {
+	dryRun := r.URL.Query().Get("dryRun") == "true"
+	payload, err := io.ReadAll(io.LimitReader(r.Body, s.cfg.MaximumRequestBytes+1))
+	if err != nil || int64(len(payload)) > s.cfg.MaximumRequestBytes {
+		writeProblem(w, 400, "invalid_backup", "Backup exceeds the configured limit.")
+		return
+	}
+	value, err := s.operations.Restore(r.Context(), actor(), payload, dryRun)
+	respond(w, value, err)
+}
+
+type uninstallRequest struct {
+	PreserveData bool `json:"preserveData"`
+	DryRun       bool `json:"dryRun"`
+}
+
+func (s *Server) uninstall(w http.ResponseWriter, r *http.Request) {
+	var request uninstallRequest
+	if !s.decode(w, r, &request) {
+		return
+	}
+	value, err := s.operations.Uninstall(r.Context(), actor(), request.PreserveData, request.DryRun)
+	respond(w, value, err)
+}
+func (s *Server) validateConfiguration(w http.ResponseWriter, r *http.Request) {
+	payload, ok := s.readPayload(w, r)
+	if !ok {
+		return
+	}
+	value, err := s.operations.ValidateConfiguration(r.Context(), actor(), payload)
+	respond(w, value, err)
+}
+func (s *Server) applyConfiguration(w http.ResponseWriter, r *http.Request) {
+	payload, ok := s.readPayload(w, r)
+	if !ok {
+		return
+	}
+	value, err := s.operations.ApplyConfiguration(r.Context(), actor(), payload, r.URL.Query().Get("dryRun") == "true")
+	respond(w, value, err)
+}
+func (s *Server) readPayload(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
+	payload, err := io.ReadAll(io.LimitReader(r.Body, s.cfg.MaximumRequestBytes+1))
+	if err != nil || int64(len(payload)) > s.cfg.MaximumRequestBytes {
+		writeProblem(w, 400, "invalid_payload", "Payload exceeds the configured limit.")
+		return nil, false
+	}
+	return payload, true
+}
+func (s *Server) decode(w http.ResponseWriter, r *http.Request, target any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, s.cfg.MaximumRequestBytes)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		writeProblem(w, 400, "invalid_request", "Request JSON is invalid.")
+		return false
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		writeProblem(w, 400, "invalid_request", "Only one JSON value is allowed.")
+		return false
+	}
+	return true
+}
+func decodeArtifact(binaryValue, signatureValue, keyValue, configurationValue string) ([]byte, []byte, ed25519.PublicKey, []byte, error) {
+	binary, err := base64.StdEncoding.DecodeString(binaryValue)
+	if err != nil {
+		return nil, nil, nil, nil, errors.New("binaryBase64 is invalid")
+	}
+	signature, err := hex.DecodeString(signatureValue)
+	if err != nil || len(signature) != ed25519.SignatureSize {
+		return nil, nil, nil, nil, errors.New("signatureHex is invalid")
+	}
+	key, err := hex.DecodeString(keyValue)
+	if err != nil || len(key) != ed25519.PublicKeySize {
+		return nil, nil, nil, nil, errors.New("publicKeyHex is invalid")
+	}
+	configuration := []byte(nil)
+	if configurationValue != "" {
+		configuration, err = base64.StdEncoding.DecodeString(configurationValue)
+		if err != nil {
+			return nil, nil, nil, nil, errors.New("configurationBase64 is invalid")
+		}
+	}
+	return binary, signature, ed25519.PublicKey(key), configuration, nil
+}
+func respond(w http.ResponseWriter, value any, err error) {
+	if err != nil {
+		writeProblem(w, 400, "operation_failed", err.Error())
+		return
+	}
+	writeJSON(w, 200, value)
+}
+func writeJSON(w http.ResponseWriter, status int, value any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(value)
+}
+func writeProblem(w http.ResponseWriter, status int, code, detail string) {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]any{"type": "https://aquaos.dev/problems/" + code, "title": "Admin operation failed", "status": status, "code": code, "detail": detail})
+}

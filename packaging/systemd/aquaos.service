@@ -1,0 +1,22 @@
+[Unit]
+Description=AquaOS Core
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aquaos
+Group=aquaos
+ExecStart=/opt/aquaos/bin/aquaos -config /etc/aquaos/aquaos.yaml
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/aquaos /var/log/aquaos
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

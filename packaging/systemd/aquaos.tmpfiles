@@ -1,0 +1,2 @@
+d /var/lib/aquaos 0750 aquaos aquaos -
+d /var/log/aquaos 0750 aquaos aquaos -

@@ -110,6 +110,11 @@ Prompt 11 adds bounded optional InfluxDB persistence and sample Grafana
 provisioning. Storage failure never blocks control; see
 [docs/persistence.md](docs/persistence.md).
 
+Prompt 12 adds the native Control VM operations service, headless `aquaosctl`,
+and separately launched embedded Admin GUI. See
+[docs/control-vm-installation.md](docs/control-vm-installation.md). Physical
+clean-VM and cross-server acceptance evidence remains required.
+
 ## Safe development startup
 
 Requirements:

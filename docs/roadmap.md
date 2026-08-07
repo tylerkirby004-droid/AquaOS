@@ -24,8 +24,9 @@ criteria. Work proceeds in order and stops when a required gate lacks evidence.
    implemented with authenticated/application-service-only mutations, stable
    entity identity, retained cleanup, and optional-outage isolation. Bounded
    optional InfluxDB persistence and Grafana examples are also implemented.
-10. v0.8 Operations beta — guided installation, Admin GUI, and multi-server
-    operations.
+10. v0.8 Operations beta — operations services, signed artifact verification,
+    native systemd installation, recovery CLI, and embedded Admin GUI are
+    implemented; clean-VM and cross-server evidence remains required.
 11. v0.9 Release candidate — hardening, matrix tests, and 72-hour soak.
 12. v1.0 Stable — approved release evidence, artifacts, and compatibility.
 
