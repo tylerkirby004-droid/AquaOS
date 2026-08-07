@@ -163,3 +163,20 @@ func TestRateLimiterRefillsWithoutGoroutine(t *testing.T) {
 		t.Fatal("token did not refill")
 	}
 }
+
+func TestRateLimiterBoundsUntrustedClientKeys(t *testing.T) {
+	limiter := newRateLimiter(1, 1)
+	limiter.maximum = 4
+	for i := 0; i < 20; i++ {
+		limiter.allow(string(rune('a'+i)), time.Unix(int64(i), 0))
+	}
+	if len(limiter.clients) != limiter.maximum {
+		t.Fatalf("clients = %d", len(limiter.clients))
+	}
+}
+
+func TestBearerAuthenticatorRejectsShortSecrets(t *testing.T) {
+	if _, err := NewBearerAuthenticator("short", Principal{ID: "test"}); err == nil {
+		t.Fatal("short bearer token accepted")
+	}
+}

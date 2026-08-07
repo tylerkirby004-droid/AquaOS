@@ -66,7 +66,7 @@ type Server struct {
 
 // New constructs an Admin GUI server without starting it.
 func New(cfg Config, service Operations, logger *slog.Logger) (*Server, error) {
-	if cfg.Address == "" || cfg.Token == "" || cfg.MaximumRequestBytes < 1024 || cfg.MaximumRequestBytes > 64*1024*1024 || cfg.ShutdownTimeout <= 0 {
+	if cfg.Address == "" || len(cfg.Token) < 32 || cfg.MaximumRequestBytes < 1024 || cfg.MaximumRequestBytes > 64*1024*1024 || cfg.ShutdownTimeout <= 0 {
 		return nil, errors.New("admin listener, token, and safe bounds are required")
 	}
 	if service == nil || logger == nil {
@@ -91,7 +91,7 @@ func New(cfg Config, service Operations, logger *slog.Logger) (*Server, error) {
 	mux.Handle("POST /api/uninstall", result.authorize(http.HandlerFunc(result.uninstall)))
 	mux.Handle("POST /api/config/validate", result.authorize(http.HandlerFunc(result.validateConfiguration)))
 	mux.Handle("POST /api/config/apply", result.authorize(http.HandlerFunc(result.applyConfiguration)))
-	result.server = &http.Server{Addr: cfg.Address, Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
+	result.server = &http.Server{Addr: cfg.Address, Handler: result.secure(mux), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
 	return result, nil
 }
 
@@ -184,6 +184,23 @@ func (s *Server) authorize(next http.Handler) http.Handler {
 		if len(provided) != len(s.cfg.Token) || subtle.ConstantTimeCompare([]byte(provided), []byte(s.cfg.Token)) != 1 {
 			writeProblem(w, 401, "authentication_required", "Valid bearer credentials are required.")
 			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+func (s *Server) secure(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
+			origin := r.Header.Get("Origin")
+			if origin != "" && origin != "http://"+r.Host && origin != "https://"+r.Host {
+				writeProblem(w, http.StatusForbidden, "origin_rejected", "Cross-origin mutation requests are forbidden.")
+				return
+			}
 		}
 		next.ServeHTTP(w, r)
 	})

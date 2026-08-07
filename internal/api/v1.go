@@ -84,6 +84,7 @@ type ConfigurationService interface {
 type rateLimiter struct {
 	mu          sync.Mutex
 	rate, burst float64
+	maximum     int
 	clients     map[string]*bucket
 }
 type bucket struct {
@@ -98,13 +99,23 @@ func newRateLimiter(rate, burst int) *rateLimiter {
 	if burst < 1 {
 		burst = 1
 	}
-	return &rateLimiter{rate: float64(rate), burst: float64(burst), clients: make(map[string]*bucket)}
+	return &rateLimiter{rate: float64(rate), burst: float64(burst), maximum: 1024, clients: make(map[string]*bucket)}
 }
 func (l *rateLimiter) allow(key string, now time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	b, ok := l.clients[key]
 	if !ok {
+		if len(l.clients) >= l.maximum {
+			oldestKey := ""
+			var oldest time.Time
+			for candidate, value := range l.clients {
+				if oldestKey == "" || value.updated.Before(oldest) {
+					oldestKey, oldest = candidate, value.updated
+				}
+			}
+			delete(l.clients, oldestKey)
+		}
 		l.clients[key] = &bucket{tokens: l.burst - 1, updated: now}
 		return true
 	}
@@ -139,6 +150,9 @@ func (s *Server) registerV1(mux *http.ServeMux) {
 
 func (s *Server) withCorrelation(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
 		id := request.Header.Get(correlationHeader)
 		if domain.CorrelationID(id).Validate() != nil {
 			generated, err := domain.NewCorrelationID()

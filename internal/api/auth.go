@@ -53,8 +53,8 @@ type BearerAuthenticator struct {
 
 // NewBearerAuthenticator constructs a constant-time bearer authenticator.
 func NewBearerAuthenticator(token string, principal Principal) (*BearerAuthenticator, error) {
-	if strings.TrimSpace(token) == "" || strings.TrimSpace(principal.ID) == "" {
-		return nil, errors.New("bearer token and principal ID are required")
+	if len(token) < 32 || strings.TrimSpace(principal.ID) == "" {
+		return nil, errors.New("bearer token must contain at least 32 characters and principal ID is required")
 	}
 	return &BearerAuthenticator{token: token, principal: principal}, nil
 }

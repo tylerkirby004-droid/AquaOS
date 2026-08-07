@@ -54,7 +54,7 @@ func (*fakeOperations) ApplyConfiguration(context.Context, operations.Actor, []b
 }
 func newTestServer(t *testing.T, service Operations) *Server {
 	t.Helper()
-	server, err := New(Config{Address: "127.0.0.1:0", Token: "test-token", MaximumRequestBytes: 1024, ShutdownTimeout: time.Second}, service, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	server, err := New(Config{Address: "127.0.0.1:0", Token: "test-token-with-at-least-32-characters", MaximumRequestBytes: 1024, ShutdownTimeout: time.Second}, service, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestAdminMutationCallsAuthorizedApplicationService(t *testing.T) {
 	service := &fakeOperations{}
 	server := newTestServer(t, service)
 	request := httptest.NewRequest(http.MethodPost, "/api/repair", strings.NewReader(`{"dryRun":true}`))
-	request.Header.Set("Authorization", "Bearer test-token")
+	request.Header.Set("Authorization", "Bearer test-token-with-at-least-32-characters")
 	response := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK || service.repairs != 1 {
@@ -90,10 +90,26 @@ func TestEmbeddedAdminUIIsAvailableWithoutNodeBuild(t *testing.T) {
 func TestRestorePayloadIsBounded(t *testing.T) {
 	server := newTestServer(t, &fakeOperations{})
 	request := httptest.NewRequest(http.MethodPost, "/api/restore", strings.NewReader(strings.Repeat("x", 1025)))
-	request.Header.Set("Authorization", "Bearer test-token")
+	request.Header.Set("Authorization", "Bearer test-token-with-at-least-32-characters")
 	response := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(response, request)
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d", response.Code)
+	}
+}
+
+func TestAdminSecurityHeadersAndOriginPolicy(t *testing.T) {
+	server := newTestServer(t, &fakeOperations{})
+	request := httptest.NewRequest(http.MethodPost, "/api/repair", strings.NewReader(`{"dryRun":true}`))
+	request.Host = "127.0.0.1:8090"
+	request.Header.Set("Authorization", "Bearer test-token-with-at-least-32-characters")
+	request.Header.Set("Origin", "https://attacker.example")
+	response := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status = %d", response.Code)
+	}
+	if response.Header().Get("X-Frame-Options") != "DENY" || response.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("required browser security headers were not set")
 	}
 }
