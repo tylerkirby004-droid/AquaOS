@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tylerkirby004-droid/aquaos/internal/domain"
 	"github.com/tylerkirby004-droid/aquaos/internal/events"
 )
 
@@ -257,6 +258,24 @@ func TestRealAdaptersRequireExplicitBenchActivationAndTypedBounds(t *testing.T) 
 	cfg.Simulator.Enabled = true
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("simulator and real adapter conflict was accepted")
+	}
+}
+
+func TestOperatorConfigurationValidatesAlarmCalibrationCommissioningAndBackup(t *testing.T) {
+	cfg := Defaults()
+	calibratedAt := time.Now().UTC()
+	cfg.Inventory.Devices = []Device{{ID: "sensor-node", Name: "Fish room sensor node"}}
+	cfg.Inventory.Sensors = []Sensor{{ID: "tank-temperature", DeviceID: "sensor-node", Unit: "celsius", Calibration: Calibration{Enabled: true, Scale: 1, Offset: -0.1, Reference: "traceable thermometer", CalibratedBy: "operator", CalibratedAt: calibratedAt}}}
+	cfg.Inventory.Equipment = []Equipment{{ID: "return-pump", DeviceID: "sensor-node", Kind: "return-pump", Capabilities: []domain.Capability{domain.CapabilitySwitch}}}
+	high := 28.0
+	cfg.Alarms.Rules = []AlarmRule{{ID: "temperature-range", Name: "Tank temperature unsafe", SensorID: "tank-temperature", Condition: "outside", Threshold: 24, ThresholdHigh: &high, Severity: "critical", Delay: time.Minute, ClearDelay: 5 * time.Minute, Latching: true, Notifications: []string{"home-assistant", "log"}}}
+	cfg.Backups = Backup{Enabled: true, Destination: "/mnt/aquaos-backups", RetentionDays: 30}
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	cfg.Inventory.Equipment[0] = Equipment{ID: "heater", DeviceID: "sensor-node", Kind: "heater", Capabilities: []domain.Capability{domain.CapabilitySwitch}, Hazardous: true, MaximumOn: time.Hour, Commissioning: Commissioning{Stage: "commissioned"}}
+	if err := cfg.Validate(); validationCode(err) != "evidence_required" {
+		t.Fatalf("unsafe commissioning error = %v", err)
 	}
 }
 

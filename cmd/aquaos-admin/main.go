@@ -7,13 +7,17 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/tylerkirby004-droid/aquaos/internal/adapters/esp32"
+	"github.com/tylerkirby004-droid/aquaos/internal/adapters/shelly"
 	"github.com/tylerkirby004-droid/aquaos/internal/admin"
+	"github.com/tylerkirby004-droid/aquaos/internal/discovery"
 	"github.com/tylerkirby004-droid/aquaos/internal/operations"
 )
 
@@ -43,7 +47,23 @@ func run() int {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	server, err := admin.New(admin.Config{Address: *address, Token: token, MaximumRequestBytes: 32 * 1024 * 1024, ShutdownTimeout: 10 * time.Second, AuthenticationRate: *authenticationRate, AuthenticationBurst: *authenticationBurst, MutationRate: *mutationRate, MutationBurst: *mutationBurst}, service, logger.With("component", "admin"))
+	httpClient := &http.Client{Transport: &http.Transport{Proxy: nil, MaxIdleConns: 16, MaxIdleConnsPerHost: 2, IdleConnTimeout: 30 * time.Second}}
+	shellyClient, err := shelly.NewHTTPClient(httpClient)
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	esp32Client, err := esp32.NewHTTPClient(httpClient)
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	discoveryService, err := discovery.New(shellyClient, esp32Client, 4, 3*time.Second)
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	server, err := admin.New(admin.Config{Address: *address, Token: token, MaximumRequestBytes: 32 * 1024 * 1024, ShutdownTimeout: 10 * time.Second, AuthenticationRate: *authenticationRate, AuthenticationBurst: *authenticationBurst, MutationRate: *mutationRate, MutationBurst: *mutationBurst}, service, logger.With("component", "admin"), admin.WithDiscovery(discoveryService))
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		return 1

@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -43,6 +44,8 @@ type Config struct {
 	Bench         Bench       `yaml:"bench" json:"bench"`
 	Storage       Storage     `yaml:"storage" json:"storage"`
 	Inventory     Inventory   `yaml:"inventory" json:"inventory"`
+	Alarms        AlarmConfig `yaml:"alarms" json:"alarms"`
+	Backups       Backup      `yaml:"backups" json:"backups"`
 }
 
 // Storage configures optional bounded historical persistence.
@@ -192,22 +195,93 @@ type Inventory struct {
 
 // Device declares an adapter-owned physical device identity.
 type Device struct {
-	ID string `yaml:"id" json:"id"`
+	ID           string            `yaml:"id" json:"id"`
+	EntityID     string            `yaml:"entity_id,omitempty" json:"entityId,omitempty"`
+	Name         string            `yaml:"name,omitempty" json:"name,omitempty"`
+	Description  string            `yaml:"description,omitempty" json:"description,omitempty"`
+	Manufacturer string            `yaml:"manufacturer,omitempty" json:"manufacturer,omitempty"`
+	Model        string            `yaml:"model,omitempty" json:"model,omitempty"`
+	Firmware     string            `yaml:"firmware,omitempty" json:"firmware,omitempty"`
+	Metadata     map[string]string `yaml:"metadata,omitempty" json:"metadata,omitempty"`
 }
 
 // Sensor declares a generic measurement boundary without sensor business logic.
 type Sensor struct {
-	ID       string   `yaml:"id" json:"id"`
-	DeviceID string   `yaml:"device_id" json:"deviceId"`
-	Unit     string   `yaml:"unit" json:"unit"`
-	Minimum  *float64 `yaml:"minimum" json:"minimum,omitempty"`
-	Maximum  *float64 `yaml:"maximum" json:"maximum,omitempty"`
+	ID          string      `yaml:"id" json:"id"`
+	EntityID    string      `yaml:"entity_id,omitempty" json:"entityId,omitempty"`
+	DeviceID    string      `yaml:"device_id" json:"deviceId"`
+	Unit        string      `yaml:"unit" json:"unit"`
+	Minimum     *float64    `yaml:"minimum" json:"minimum,omitempty"`
+	Maximum     *float64    `yaml:"maximum" json:"maximum,omitempty"`
+	Name        string      `yaml:"name,omitempty" json:"name,omitempty"`
+	Quantity    string      `yaml:"quantity,omitempty" json:"quantity,omitempty"`
+	Calibration Calibration `yaml:"calibration,omitempty" json:"calibration"`
 }
 
 // Equipment declares a generic output identity and its owning device.
 type Equipment struct {
-	ID       string `yaml:"id" json:"id"`
-	DeviceID string `yaml:"device_id" json:"deviceId"`
+	ID            string              `yaml:"id" json:"id"`
+	EntityID      string              `yaml:"entity_id,omitempty" json:"entityId,omitempty"`
+	DeviceID      string              `yaml:"device_id" json:"deviceId"`
+	Name          string              `yaml:"name,omitempty" json:"name,omitempty"`
+	Kind          string              `yaml:"kind,omitempty" json:"kind,omitempty"`
+	Capabilities  []domain.Capability `yaml:"capabilities,omitempty" json:"capabilities,omitempty"`
+	Hazardous     bool                `yaml:"hazardous,omitempty" json:"hazardous"`
+	FailSafeOn    bool                `yaml:"fail_safe_on,omitempty" json:"failSafeOn"`
+	MaximumOn     time.Duration       `yaml:"maximum_on,omitempty" json:"maximumOn"`
+	MaximumDaily  time.Duration       `yaml:"maximum_daily_on,omitempty" json:"maximumDailyOn"`
+	MinimumOff    time.Duration       `yaml:"minimum_off,omitempty" json:"minimumOff"`
+	Commissioning Commissioning       `yaml:"commissioning,omitempty" json:"commissioning"`
+}
+
+// Calibration applies a documented linear correction after raw validation.
+// Corrected = raw*scale + offset. Disabled calibration leaves readings intact.
+type Calibration struct {
+	Enabled      bool      `yaml:"enabled" json:"enabled"`
+	Scale        float64   `yaml:"scale,omitempty" json:"scale"`
+	Offset       float64   `yaml:"offset,omitempty" json:"offset"`
+	Reference    string    `yaml:"reference,omitempty" json:"reference,omitempty"`
+	CalibratedBy string    `yaml:"calibrated_by,omitempty" json:"calibratedBy,omitempty"`
+	CalibratedAt time.Time `yaml:"calibrated_at,omitempty" json:"calibratedAt,omitempty"`
+}
+
+// Commissioning is the persisted operator evidence for physical activation.
+type Commissioning struct {
+	Stage                       string    `yaml:"stage,omitempty" json:"stage,omitempty"`
+	SafeTestLoad                bool      `yaml:"safe_test_load,omitempty" json:"safeTestLoad"`
+	FailSafeStateVerified       bool      `yaml:"fail_safe_state_verified,omitempty" json:"failSafeStateVerified"`
+	PowerReturnVerified         bool      `yaml:"power_return_verified,omitempty" json:"powerReturnVerified"`
+	IndependentSafeguardPresent bool      `yaml:"independent_safeguard_present,omitempty" json:"independentSafeguardPresent"`
+	VerifiedBy                  string    `yaml:"verified_by,omitempty" json:"verifiedBy,omitempty"`
+	VerifiedAt                  time.Time `yaml:"verified_at,omitempty" json:"verifiedAt,omitempty"`
+}
+
+// AlarmConfig contains user-defined typed sensor policies.
+type AlarmConfig struct {
+	Rules []AlarmRule `yaml:"rules" json:"rules"`
+}
+
+// AlarmRule declares one threshold policy without embedding notification code.
+type AlarmRule struct {
+	ID            string        `yaml:"id" json:"id"`
+	Name          string        `yaml:"name" json:"name"`
+	SensorID      string        `yaml:"sensor_id" json:"sensorId"`
+	Condition     string        `yaml:"condition" json:"condition"`
+	Threshold     float64       `yaml:"threshold" json:"threshold"`
+	ThresholdHigh *float64      `yaml:"threshold_high,omitempty" json:"thresholdHigh,omitempty"`
+	Severity      string        `yaml:"severity" json:"severity"`
+	Delay         time.Duration `yaml:"delay" json:"delay"`
+	ClearDelay    time.Duration `yaml:"clear_delay" json:"clearDelay"`
+	Latching      bool          `yaml:"latching" json:"latching"`
+	Notifications []string      `yaml:"notifications" json:"notifications"`
+}
+
+// Backup configures a mounted local or network destination. Backup execution
+// remains explicit and never blocks critical control.
+type Backup struct {
+	Enabled       bool   `yaml:"enabled" json:"enabled"`
+	Destination   string `yaml:"destination,omitempty" json:"destination,omitempty"`
+	RetentionDays int    `yaml:"retention_days,omitempty" json:"retentionDays,omitempty"`
 }
 
 // ValidationError is a stable, machine-inspectable configuration error.
@@ -230,6 +304,8 @@ func Defaults() Config {
 		MQTT:          MQTT{ConnectTimeout: 10 * time.Second, KeepAlive: 30 * time.Second, DisconnectQuiesce: 250 * time.Millisecond, MaximumPayload: 256 * 1024, QueueCapacity: 256, IdempotencyCapacity: 4096, ReconnectMinimum: time.Second, ReconnectMaximum: time.Minute, ReconnectJitter: 0.2, HomeAssistant: HomeAssistant{CommandTTL: 10 * time.Second}},
 		Simulator:     Simulator{Enabled: true},
 		Storage:       Storage{InfluxDB: InfluxDB{QueueCapacity: 4096, BatchSize: 200, FlushInterval: 5 * time.Second, RetryMinimum: time.Second, RetryMaximum: time.Minute, WriteTimeout: 5 * time.Second}},
+		Inventory:     Inventory{Devices: []Device{}, Sensors: []Sensor{}, Equipment: []Equipment{}},
+		Alarms:        AlarmConfig{Rules: []AlarmRule{}},
 	}
 }
 
@@ -446,7 +522,13 @@ func (c Config) Validate() error {
 	if err := c.validateAdapters(); err != nil {
 		return err
 	}
-	return c.Inventory.validate()
+	if err := c.Inventory.validate(); err != nil {
+		return err
+	}
+	if err := c.Alarms.validate(c.Inventory); err != nil {
+		return err
+	}
+	return c.Backups.validate()
 }
 
 func (c Config) validateAdapters() error {
@@ -599,6 +681,11 @@ func (i Inventory) validate() error {
 			return validationError(path, "duplicate_id", "duplicates "+device.ID)
 		}
 		devices[device.ID] = struct{}{}
+		if device.EntityID != "" {
+			if err := validateUUID(fmt.Sprintf("inventory.devices[%d].entity_id", index), device.EntityID); err != nil {
+				return err
+			}
+		}
 	}
 	seen := make(map[string]string, len(i.Sensors)+len(i.Equipment))
 	for index, sensor := range i.Sensors {
@@ -610,6 +697,11 @@ func (i Inventory) validate() error {
 			return validationError(base+".id", "duplicate_id", "duplicates "+previous)
 		}
 		seen[sensor.ID] = base + ".id"
+		if sensor.EntityID != "" {
+			if err := validateUUID(base+".entity_id", sensor.EntityID); err != nil {
+				return err
+			}
+		}
 		if _, exists := devices[sensor.DeviceID]; !exists {
 			return validationError(base+".device_id", "invalid_reference", "references unknown device "+sensor.DeviceID)
 		}
@@ -625,6 +717,14 @@ func (i Inventory) validate() error {
 		if sensor.Minimum != nil && sensor.Maximum != nil && *sensor.Minimum >= *sensor.Maximum {
 			return validationError(base+".maximum", "out_of_range", "must be greater than minimum")
 		}
+		if sensor.Calibration.Enabled {
+			if sensor.Calibration.Scale == 0 || math.IsNaN(sensor.Calibration.Scale) || math.IsInf(sensor.Calibration.Scale, 0) || math.IsNaN(sensor.Calibration.Offset) || math.IsInf(sensor.Calibration.Offset, 0) {
+				return validationError(base+".calibration", "out_of_range", "scale must be non-zero and calibration values must be finite")
+			}
+			if strings.TrimSpace(sensor.Calibration.Reference) == "" || strings.TrimSpace(sensor.Calibration.CalibratedBy) == "" || sensor.Calibration.CalibratedAt.IsZero() {
+				return validationError(base+".calibration", "evidence_required", "reference, operator, and calibration time are required")
+			}
+		}
 	}
 	for index, equipment := range i.Equipment {
 		base := fmt.Sprintf("inventory.equipment[%d]", index)
@@ -635,9 +735,117 @@ func (i Inventory) validate() error {
 			return validationError(base+".id", "duplicate_id", "duplicates "+previous)
 		}
 		seen[equipment.ID] = base + ".id"
+		if equipment.EntityID != "" {
+			if err := validateUUID(base+".entity_id", equipment.EntityID); err != nil {
+				return err
+			}
+		}
 		if _, exists := devices[equipment.DeviceID]; !exists {
 			return validationError(base+".device_id", "invalid_reference", "references unknown device "+equipment.DeviceID)
 		}
+		if equipment.Kind != "" {
+			if !oneOf(equipment.Kind, "outlet", "heater", "return-pump", "circulation-pump", "dosing-pump", "light", "ato") {
+				return validationError(base+".kind", "invalid_enum", "is not a supported equipment kind")
+			}
+			if err := domain.ValidateCapabilities(equipment.Capabilities); err != nil {
+				return validationError(base+".capabilities", "invalid_capability", err.Error())
+			}
+		}
+		if equipment.MaximumOn < 0 || equipment.MaximumDaily < 0 || equipment.MinimumOff < 0 {
+			return validationError(base+".maximum_on", "out_of_range", "equipment time limits cannot be negative")
+		}
+		if equipment.MaximumDaily > 0 && equipment.MaximumOn > equipment.MaximumDaily {
+			return validationError(base+".maximum_daily_on", "out_of_range", "must be at least maximum_on")
+		}
+		hazardousKind := oneOf(equipment.Kind, "heater", "dosing-pump", "ato")
+		if hazardousKind && (!equipment.Hazardous || equipment.FailSafeOn || equipment.MaximumOn <= 0) {
+			return validationError(base, "unsafe_equipment", "heater, dosing-pump, and ATO equipment must be hazardous, fail safe off, and have a positive maximum_on")
+		}
+		if equipment.Kind == "dosing-pump" && equipment.MaximumDaily <= 0 {
+			return validationError(base+".maximum_daily_on", "required", "is required for dosing equipment")
+		}
+		if err := equipment.Commissioning.validate(base+".commissioning", equipment.Hazardous); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c Commissioning) validate(path string, hazardous bool) error {
+	stage := c.Stage
+	if stage == "" {
+		stage = "uncommissioned"
+	}
+	if !oneOf(stage, "uncommissioned", "discovered", "mapped", "configured", "validated", "bench-tested", "commissioned", "disabled") {
+		return validationError(path+".stage", "invalid_enum", "is not a supported commissioning stage")
+	}
+	if stage != "bench-tested" && stage != "commissioned" {
+		return nil
+	}
+	if !c.SafeTestLoad || !c.FailSafeStateVerified || !c.PowerReturnVerified || strings.TrimSpace(c.VerifiedBy) == "" || c.VerifiedAt.IsZero() {
+		return validationError(path, "evidence_required", "bench-tested equipment requires complete physical verification evidence")
+	}
+	if hazardous && !c.IndependentSafeguardPresent {
+		return validationError(path+".independent_safeguard_present", "required", "is required for hazardous equipment")
+	}
+	return nil
+}
+
+func (a AlarmConfig) validate(inventory Inventory) error {
+	sensors := make(map[string]struct{}, len(inventory.Sensors))
+	for _, sensor := range inventory.Sensors {
+		sensors[sensor.ID] = struct{}{}
+	}
+	seen := make(map[string]struct{}, len(a.Rules))
+	for index, rule := range a.Rules {
+		base := fmt.Sprintf("alarms.rules[%d]", index)
+		if err := validateID(base+".id", rule.ID); err != nil {
+			return err
+		}
+		if _, exists := seen[rule.ID]; exists {
+			return validationError(base+".id", "duplicate_id", "alarm rule ID is duplicated")
+		}
+		seen[rule.ID] = struct{}{}
+		if _, exists := sensors[rule.SensorID]; !exists {
+			return validationError(base+".sensor_id", "invalid_reference", "references unknown sensor "+rule.SensorID)
+		}
+		if strings.TrimSpace(rule.Name) == "" {
+			return validationError(base+".name", "required", "is required")
+		}
+		if !oneOf(rule.Condition, "above", "below", "outside", "true", "false") {
+			return validationError(base+".condition", "invalid_enum", "must be above, below, outside, true, or false")
+		}
+		if math.IsNaN(rule.Threshold) || math.IsInf(rule.Threshold, 0) || (rule.ThresholdHigh != nil && (math.IsNaN(*rule.ThresholdHigh) || math.IsInf(*rule.ThresholdHigh, 0))) {
+			return validationError(base+".threshold", "out_of_range", "threshold values must be finite")
+		}
+		if rule.Condition == "outside" && (rule.ThresholdHigh == nil || rule.Threshold >= *rule.ThresholdHigh) {
+			return validationError(base+".threshold_high", "out_of_range", "outside condition requires an upper threshold greater than the lower threshold")
+		}
+		if !oneOf(rule.Severity, "info", "warning", "critical") {
+			return validationError(base+".severity", "invalid_enum", "must be info, warning, or critical")
+		}
+		if rule.Delay < 0 || rule.Delay > 24*time.Hour || rule.ClearDelay < 0 || rule.ClearDelay > 24*time.Hour {
+			return validationError(base+".delay", "out_of_range", "delay and clear_delay must be between zero and 24h")
+		}
+		for _, target := range rule.Notifications {
+			if !oneOf(target, "home-assistant", "mqtt", "log") {
+				return validationError(base+".notifications", "invalid_enum", "contains an unsupported notification target")
+			}
+		}
+	}
+	return nil
+}
+
+func (b Backup) validate() error {
+	if !b.Enabled {
+		return nil
+	}
+	clean := path.Clean(b.Destination)
+	if !strings.HasPrefix(clean, "/") || clean == "/" {
+		return validationError("backups.destination", "invalid_path", "must be a dedicated absolute directory")
+	}
+	if b.RetentionDays < 1 || b.RetentionDays > 3650 {
+		return validationError("backups.retention_days", "out_of_range", "must be between 1 and 3650")
 	}
 	return nil
 }
@@ -685,6 +893,9 @@ func (c Config) Clone() Config {
 	cloned := c
 	cloned.MQTT.HomeAssistant.Tombstones = append([]HomeAssistantTombstone(nil), c.MQTT.HomeAssistant.Tombstones...)
 	cloned.Inventory.Devices = append([]Device(nil), c.Inventory.Devices...)
+	for index := range cloned.Inventory.Devices {
+		cloned.Inventory.Devices[index].Metadata = cloneStringMap(c.Inventory.Devices[index].Metadata)
+	}
 	cloned.Inventory.Sensors = append([]Sensor(nil), c.Inventory.Sensors...)
 	for index := range cloned.Inventory.Sensors {
 		if c.Inventory.Sensors[index].Minimum != nil {
@@ -697,6 +908,17 @@ func (c Config) Clone() Config {
 		}
 	}
 	cloned.Inventory.Equipment = append([]Equipment(nil), c.Inventory.Equipment...)
+	for index := range cloned.Inventory.Equipment {
+		cloned.Inventory.Equipment[index].Capabilities = append([]domain.Capability(nil), c.Inventory.Equipment[index].Capabilities...)
+	}
+	cloned.Alarms.Rules = append([]AlarmRule(nil), c.Alarms.Rules...)
+	for index := range cloned.Alarms.Rules {
+		cloned.Alarms.Rules[index].Notifications = append([]string(nil), c.Alarms.Rules[index].Notifications...)
+		if c.Alarms.Rules[index].ThresholdHigh != nil {
+			value := *c.Alarms.Rules[index].ThresholdHigh
+			cloned.Alarms.Rules[index].ThresholdHigh = &value
+		}
+	}
 	cloned.Adapters.Shelly.Endpoints = append([]ShellyEndpoint(nil), c.Adapters.Shelly.Endpoints...)
 	for index := range cloned.Adapters.Shelly.Endpoints {
 		cloned.Adapters.Shelly.Endpoints[index].RequiredProbeIDs = append([]string(nil), c.Adapters.Shelly.Endpoints[index].RequiredProbeIDs...)
@@ -706,4 +928,15 @@ func (c Config) Clone() Config {
 		cloned.Adapters.ESP32.Endpoints[index].ProbeIDs = append([]string(nil), c.Adapters.ESP32.Endpoints[index].ProbeIDs...)
 	}
 	return cloned
+}
+
+func cloneStringMap(source map[string]string) map[string]string {
+	if source == nil {
+		return nil
+	}
+	result := make(map[string]string, len(source))
+	for key, value := range source {
+		result[key] = value
+	}
+	return result
 }

@@ -113,3 +113,25 @@ own their goroutines, derive them from the supplied context, and join them in
 Health reports process liveness separately from readiness. Required component
 failure is `unhealthy` and blocks readiness. Optional integration failure is
 `degraded` but cannot stop authoritative local control.
+
+## Guided inventory and commissioning
+
+Inventory entries may include friendly names, stable runtime UUIDs, equipment
+kind/capabilities and hard timing limits, calibration evidence, and
+commissioning evidence. These fields are additive to schema v1; existing
+minimal inventory entries remain valid.
+
+User alarm rules live under `alarms.rules`. Each rule references a configured
+sensor, uses a typed `above`, `below`, `outside`, `true`, or `false` condition,
+and declares severity, activation delay, clear delay, latching, and optional
+noncritical notification targets. Notification delivery never participates in
+critical control.
+
+An equipment entry is not authorized merely because it exists. The Admin
+workflow records safe-load testing, fail-safe behavior, power-return behavior,
+operator/time evidence, and an independent safeguard for hazardous equipment.
+See [ADR-020](adr/020-guided-commissioning-and-discovery.md).
+
+`backups.destination` must be a dedicated absolute path supplied externally,
+normally a mounted backup target. `/` is rejected. Backup availability is
+operationally important but never required for Core readiness.

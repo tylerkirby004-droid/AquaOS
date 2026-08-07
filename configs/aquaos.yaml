@@ -75,5 +75,13 @@ inventory:
   sensors: []
   equipment: []
 
+alarms:
+  rules: []
+
+backups:
+  enabled: false
+  destination: ""
+  retention_days: 30
+
 # Credentials are intentionally omitted. Supply AQUAOS_MQTT_USERNAME and
 # AQUAOS_MQTT_PASSWORD through the process environment or a secrets manager.

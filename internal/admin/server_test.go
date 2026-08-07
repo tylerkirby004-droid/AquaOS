@@ -13,12 +13,19 @@ import (
 	"time"
 
 	"github.com/tylerkirby004-droid/aquaos/internal/config"
+	"github.com/tylerkirby004-droid/aquaos/internal/discovery"
 	"github.com/tylerkirby004-droid/aquaos/internal/operations"
 )
 
 type fakeOperations struct {
 	repairs   int
 	statusErr error
+}
+
+type fakeDiscovery struct{}
+
+func (fakeDiscovery) Probe(context.Context, []discovery.Candidate) ([]discovery.Result, error) {
+	return []discovery.Result{{Kind: discovery.KindShelly, BaseURL: "http://plug.local", Reachable: true}}, nil
 }
 
 func (f *fakeOperations) GetStatus(context.Context, operations.Actor) (operations.Status, error) {
@@ -123,6 +130,21 @@ func TestAdminValidatesStructuredConfigurationThroughApplicationService(t *testi
 	response := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestAdminDiscoveryUsesBoundedReadOnlyService(t *testing.T) {
+	base := newTestServer(t, &fakeOperations{})
+	server, err := New(base.cfg, &fakeOperations{}, slog.New(slog.NewTextHandler(io.Discard, nil)), WithDiscovery(fakeDiscovery{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/discovery/probe", strings.NewReader(`{"candidates":[{"kind":"shelly","baseUrl":"http://plug.local"}]}`))
+	request.Header.Set("Authorization", "Bearer test-token-with-at-least-32-characters")
+	response := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"reachable":true`) {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 }

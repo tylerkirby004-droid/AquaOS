@@ -16,8 +16,10 @@
       <button class="nav-item active" data-view="welcome">1. Welcome</button>
       <button class="nav-item" data-view="system">2. System check</button>
       <button class="nav-item" data-view="integrations">3. Services</button>
-      <button class="nav-item" data-view="inventory">4. Equipment & sensors</button>
-      <button class="nav-item" data-view="safety">5. Safety review</button>
+      <button class="nav-item" data-view="discovery">4. Find devices</button>
+      <button class="nav-item" data-view="inventory">5. Equipment & sensors</button>
+      <button class="nav-item" data-view="alarms">6. Alarms</button>
+      <button class="nav-item" data-view="safety">7. Safety review</button>
       <button class="nav-item" data-view="maintenance">Maintenance</button>
     </nav>
     <main>
@@ -46,16 +48,29 @@
         <button id="saveServices" class="primary">Check these settings</button>
       </section>
 
+      <section id="discovery" class="view">
+        <p class="eyebrow">Step 4</p><h1>Find a device</h1>
+        <p>Enter the local address printed on the device or shown by your router. AquaOS sends read-only requests only to this address; it does not scan the Internet or your whole network.</p>
+        <form id="discoveryForm" class="card fields"><label>Device type<select id="discoveryKind"><option value="shelly">Shelly Plug</option><option value="esp32">AquaOS ESP32 sensor node</option></select></label><label>Local address<input id="discoveryUrl" required placeholder="http://shellyplug.local"></label><label>Shelly outlet number<input id="discoveryChannel" type="number" min="0" max="31" value="0"></label><button class="primary">Check this address</button></form>
+        <div id="discoveryResults" class="card"><p class="empty">No device checked yet.</p></div>
+      </section>
+
       <section id="inventory" class="view">
-        <p class="eyebrow">Step 4</p><h1>Your equipment and sensors</h1>
+        <p class="eyebrow">Step 5</p><h1>Your equipment and sensors</h1>
         <p>Add clear names here. Physical network endpoints are commissioned separately and remain disabled until safety review.</p>
         <div class="split">
           <form id="deviceForm" class="card"><h2>Add a device</h2><label>Short ID<input id="deviceId" required pattern="[a-z][a-z0-9-]{0,62}" placeholder="fish-room-node"></label><button>Add device</button></form>
-          <form id="sensorForm" class="card"><h2>Add a sensor</h2><label>Short ID<input id="sensorId" required placeholder="display-tank-temperature"></label><label>Connected device<select id="sensorDevice"></select></label><label>Measurement<select id="sensorUnit"><option value="celsius">Temperature — °C</option><option value="fahrenheit">Temperature — °F</option><option value="pH">pH</option><option value="ppt">Salinity — ppt</option><option value="liters_per_hour">Flow — L/h</option><option value="boolean">On/off or leak</option></select></label><button>Add sensor</button></form>
-          <form id="equipmentForm" class="card"><h2>Add equipment</h2><label>Short ID<input id="equipmentId" required placeholder="return-pump"></label><label>Connected device<select id="equipmentDevice"></select></label><button>Add equipment</button></form>
+          <form id="sensorForm" class="card"><h2>Add a sensor</h2><label>Short ID<input id="sensorId" required placeholder="display-tank-temperature"></label><label>Display name<input id="sensorName" required placeholder="Display tank temperature"></label><label>Connected device<select id="sensorDevice"></select></label><label>Measurement<select id="sensorUnit"><option value="celsius">Temperature — °C</option><option value="fahrenheit">Temperature — °F</option><option value="pH">pH</option><option value="ppt">Salinity — ppt</option><option value="liters_per_hour">Flow — L/h</option><option value="boolean">On/off or leak</option></select></label><label class="switch"><input id="calibrationEnabled" type="checkbox"><span>Apply calibration</span></label><label>Scale<input id="calibrationScale" type="number" step="any" value="1"></label><label>Offset<input id="calibrationOffset" type="number" step="any" value="0"></label><label>Reference used<input id="calibrationReference" placeholder="Reference thermometer"></label><button>Add sensor</button></form>
+          <form id="equipmentForm" class="card"><h2>Add equipment</h2><label>Short ID<input id="equipmentId" required placeholder="return-pump"></label><label>Display name<input id="equipmentName" required placeholder="Main return pump"></label><label>Connected device<select id="equipmentDevice"></select></label><label>Equipment type<select id="equipmentKind"><option value="outlet">Power outlet</option><option value="return-pump">Return pump</option><option value="circulation-pump">Circulation pump</option><option value="heater">Heater</option><option value="ato">Automatic top-off</option><option value="dosing-pump">Dosing pump</option><option value="light">Light</option></select></label><label>Maximum continuous run<input id="maximumOn" placeholder="30m"></label><label>Maximum daily run<input id="maximumDaily" placeholder="2h"></label><label>Minimum off time<input id="minimumOff" placeholder="1m"></label><button>Add equipment</button></form>
         </div>
         <div id="inventoryList" class="card"><p class="empty">No inventory loaded.</p></div>
         <button id="checkInventory" class="primary">Check inventory</button>
+      </section>
+
+      <section id="alarms" class="view">
+        <p class="eyebrow">Step 6</p><h1>Alarm rules</h1><p>Choose what is unsafe, how long it must persist, and where AquaOS should publish the notification. Critical control never depends on notification delivery.</p>
+        <form id="alarmForm" class="card fields"><label>Rule ID<input id="alarmId" required placeholder="temperature-high"></label><label>Alarm name<input id="alarmName" required placeholder="Tank temperature too high"></label><label>Sensor<select id="alarmSensor"></select></label><label>Condition<select id="alarmCondition"><option value="above">Above</option><option value="below">Below</option><option value="outside">Outside a safe range</option><option value="true">True / active</option><option value="false">False / inactive</option></select></label><label>Threshold<input id="alarmThreshold" type="number" step="any" value="0"></label><label>Upper threshold<input id="alarmThresholdHigh" type="number" step="any"></label><label>Severity<select id="alarmSeverity"><option value="warning">Warning</option><option value="critical">Critical</option><option value="info">Information</option></select></label><label>Wait before alarming<input id="alarmDelay" placeholder="30s" value="30s"></label><label>Healthy time before clearing<input id="alarmClearDelay" placeholder="2m" value="2m"></label><label class="switch"><input id="alarmLatching" type="checkbox"><span>Require manual acknowledgement</span></label><label class="switch"><input id="notifyHA" type="checkbox" checked><span>Publish to Home Assistant</span></label><label class="switch"><input id="notifyLog" type="checkbox" checked><span>Record in logs</span></label><button>Add alarm</button></form>
+        <div id="alarmList" class="card"><p class="empty">No alarm rules configured.</p></div>
       </section>
 
       <section id="safety" class="view">
@@ -70,11 +85,14 @@
         <p class="eyebrow">Recovery tools</p><h1>Maintenance</h1>
         <p>These tools never replace a tested backup or independent equipment safeguards.</p>
         <div class="actions"><button data-action="status">Deployment status</button><button data-action="repair">Preview repair</button><button data-action="rollback">Preview rollback</button><button data-action="backup">Download backup</button></div>
+        <div class="card"><h2>Automatic backup destination</h2><label class="switch"><input id="backupEnabled" type="checkbox"><span>Enable scheduled backup destination</span></label><label>Mounted backup folder<input id="backupDestination" placeholder="/mnt/aquaos-backups"></label><label>Keep backups for this many days<input id="backupRetention" type="number" min="1" max="3650" value="30"></label><button id="saveBackup">Check backup settings</button></div>
         <pre id="result">No operation selected.</pre>
       </section>
       <div id="notice" role="status" aria-live="polite"></div>
     </main>
   </div>
+  <dialog id="commissionDialog"><form id="commissionForm" method="dialog"><h2>Safe equipment commissioning</h2><p>This records physical checks. Use a lamp or other safe test load—not aquarium equipment.</p><input id="commissionId" type="hidden"><label class="confirm"><input id="safeLoad" type="checkbox"> A safe test load was used.</label><label class="confirm"><input id="failSafeVerified" type="checkbox"> I verified the output goes to its configured safe state.</label><label class="confirm"><input id="powerReturnVerified" type="checkbox"> I removed and restored power and verified safe behavior.</label><label class="confirm"><input id="independentSafeguard" type="checkbox"> An independent physical safeguard is installed.</label><label>Operator name<input id="commissionOperator" required></label><div class="actions"><button value="cancel">Cancel</button><button id="completeCommission" value="default" class="danger">Record bench test</button></div></form></dialog>
+  <dialog id="calibrationDialog"><form id="calibrationForm" method="dialog"><h2>Calibrate sensor</h2><p>Use a known reference appropriate for this sensor. AquaOS records who performed the calibration and when.</p><input id="calibrationId" type="hidden"><label>Scale<input id="editCalibrationScale" type="number" step="any" value="1" required></label><label>Offset<input id="editCalibrationOffset" type="number" step="any" value="0" required></label><label>Reference used<input id="editCalibrationReference" required></label><label>Operator name<input id="calibrationOperator" required></label><div class="actions"><button value="cancel">Cancel</button><button id="completeCalibration" value="default" class="primary">Save calibration</button></div></form></dialog>
   <script src="app.js"></script>
 </body>
 </html>

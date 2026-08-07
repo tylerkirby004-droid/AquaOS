@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/tylerkirby004-droid/aquaos/internal/config"
+	"github.com/tylerkirby004-droid/aquaos/internal/discovery"
 	"github.com/tylerkirby004-droid/aquaos/internal/health"
 	"github.com/tylerkirby004-droid/aquaos/internal/operations"
 	"gopkg.in/yaml.v3"
@@ -44,6 +45,19 @@ type Operations interface {
 	Uninstall(context.Context, operations.Actor, bool, bool) (operations.Result, error)
 	ValidateConfiguration(context.Context, operations.Actor, []byte) (operations.ConfigurationResult, error)
 	ApplyConfiguration(context.Context, operations.Actor, []byte, bool) (operations.ConfigurationResult, error)
+}
+
+// Discovery is the Admin-owned read-only endpoint probing contract.
+type Discovery interface {
+	Probe(context.Context, []discovery.Candidate) ([]discovery.Result, error)
+}
+
+// Option configures optional Admin capabilities.
+type Option func(*Server)
+
+// WithDiscovery enables bounded, read-only Shelly and ESP32 probing.
+func WithDiscovery(service Discovery) Option {
+	return func(server *Server) { server.discovery = service }
 }
 
 // Config contains externally supplied listener and request bounds.
@@ -72,10 +86,11 @@ type Server struct {
 	cancellationDone chan struct{}
 	authentication   *requestLimiter
 	mutations        *requestLimiter
+	discovery        Discovery
 }
 
 // New constructs an Admin GUI server without starting it.
-func New(cfg Config, service Operations, logger *slog.Logger) (*Server, error) {
+func New(cfg Config, service Operations, logger *slog.Logger, options ...Option) (*Server, error) {
 	if cfg.Address == "" || len(cfg.Token) < 32 || cfg.MaximumRequestBytes < 1024 || cfg.MaximumRequestBytes > 64*1024*1024 || cfg.ShutdownTimeout <= 0 || cfg.AuthenticationRate < 1 || cfg.AuthenticationBurst < 1 || cfg.MutationRate < 1 || cfg.MutationBurst < 1 {
 		return nil, errors.New("admin listener, token, and safe bounds are required")
 	}
@@ -87,6 +102,9 @@ func New(cfg Config, service Operations, logger *slog.Logger) (*Server, error) {
 		return nil, err
 	}
 	result := &Server{cfg: cfg, operations: service, logger: logger, authentication: newRequestLimiter(cfg.AuthenticationRate, cfg.AuthenticationBurst, 1024), mutations: newRequestLimiter(cfg.MutationRate, cfg.MutationBurst, 1024)}
+	for _, option := range options {
+		option(result)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health/live", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, map[string]string{"status": "alive"}) })
 	mux.Handle("GET /admin/", http.StripPrefix("/admin/", http.FileServer(http.FS(web))))
@@ -94,6 +112,7 @@ func New(cfg Config, service Operations, logger *slog.Logger) (*Server, error) {
 	mux.Handle("GET /api/config", result.authorize(http.HandlerFunc(result.configuration)))
 	mux.Handle("POST /api/config/editable/validate", result.authorize(http.HandlerFunc(result.validateEditableConfiguration)))
 	mux.Handle("POST /api/config/editable/apply", result.authorize(http.HandlerFunc(result.applyEditableConfiguration)))
+	mux.Handle("POST /api/discovery/probe", result.authorize(http.HandlerFunc(result.probe)))
 	mux.Handle("POST /api/verify", result.authorize(http.HandlerFunc(result.verify)))
 	mux.Handle("POST /api/repair", result.authorize(http.HandlerFunc(result.repair)))
 	mux.Handle("POST /api/install", result.authorize(http.HandlerFunc(result.install)))
@@ -241,6 +260,21 @@ func (s *Server) configuration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.respond(w, editableConfiguration{Configuration: value, HTTPBearerTokenFile: value.HTTP.BearerTokenFile, InfluxDBTokenFile: value.Storage.InfluxDB.TokenFile}, nil)
+}
+
+func (s *Server) probe(w http.ResponseWriter, r *http.Request) {
+	if s.discovery == nil {
+		writeProblem(w, http.StatusServiceUnavailable, "discovery_unavailable", "Device discovery is not enabled.")
+		return
+	}
+	var request struct {
+		Candidates []discovery.Candidate `json:"candidates"`
+	}
+	if !s.decode(w, r, &request) {
+		return
+	}
+	value, err := s.discovery.Probe(r.Context(), request.Candidates)
+	s.respond(w, value, err)
 }
 
 type editableConfiguration struct {

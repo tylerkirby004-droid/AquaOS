@@ -290,17 +290,43 @@ func New(cfg config.Config, configPath string, logger *slog.Logger, supplied ...
 // registerAdapterInventory creates REST and discovery identities from validated
 // adapter ownership without opening connections or starting hardware work.
 func registerAdapterInventory(ctx context.Context, cfg config.Config, deviceRegistry *devices.Registry, sensorRegistry *sensors.Registry, equipmentRegistry *equipment.Registry) error {
+	deviceDefinitions := make(map[string]config.Device, len(cfg.Inventory.Devices))
+	for _, definition := range cfg.Inventory.Devices {
+		deviceDefinitions[definition.EntityID] = definition
+	}
+	sensorDefinitions := make(map[string]config.Sensor, len(cfg.Inventory.Sensors))
+	for _, definition := range cfg.Inventory.Sensors {
+		sensorDefinitions[definition.EntityID] = definition
+	}
+	equipmentDefinitions := make(map[string]config.Equipment, len(cfg.Inventory.Equipment))
+	for _, definition := range cfg.Inventory.Equipment {
+		equipmentDefinitions[definition.EntityID] = definition
+	}
 	for _, configured := range cfg.Adapters.Shelly.Endpoints {
 		capabilities := []domain.Capability{domain.CapabilitySwitch, domain.CapabilityCommandAcknowledgement, domain.CapabilityReportedState, domain.CapabilityPowerTelemetry}
 		deviceID := domain.DeviceID(configured.ID)
 		endpointID := domain.EndpointID(configured.ID)
-		if _, err := deviceRegistry.Register(ctx, domain.Device{ID: deviceID, Name: "Shelly " + configured.EquipmentKind, Capabilities: capabilities, Metadata: map[string]string{"adapter": "shelly", "equipmentKind": configured.EquipmentKind}}); err != nil {
+		deviceName := "Shelly " + configured.EquipmentKind
+		deviceMetadata := map[string]string{"adapter": "shelly", "equipmentKind": configured.EquipmentKind}
+		if definition, exists := deviceDefinitions[configured.ID]; exists {
+			if definition.Name != "" {
+				deviceName = definition.Name
+			}
+			for key, value := range definition.Metadata {
+				deviceMetadata[key] = value
+			}
+		}
+		if _, err := deviceRegistry.Register(ctx, domain.Device{ID: deviceID, Name: deviceName, Capabilities: capabilities, Metadata: deviceMetadata}); err != nil {
 			return err
 		}
 		if _, err := deviceRegistry.RegisterEndpoint(ctx, domain.Endpoint{ID: endpointID, DeviceID: deviceID, Name: "Shelly channel", Capabilities: capabilities}); err != nil {
 			return err
 		}
-		if _, err := equipmentRegistry.Register(ctx, domain.Equipment{ID: domain.EquipmentID(configured.EquipmentID), DeviceID: deviceID, EndpointID: endpointID, Name: configured.EquipmentKind, Capabilities: capabilities, Metadata: map[string]string{"adapter": "shelly"}}); err != nil {
+		equipmentName := configured.EquipmentKind
+		if definition, exists := equipmentDefinitions[configured.EquipmentID]; exists && definition.Name != "" {
+			equipmentName = definition.Name
+		}
+		if _, err := equipmentRegistry.Register(ctx, domain.Equipment{ID: domain.EquipmentID(configured.EquipmentID), DeviceID: deviceID, EndpointID: endpointID, Name: equipmentName, Capabilities: capabilities, Metadata: map[string]string{"adapter": "shelly"}}); err != nil {
 			return err
 		}
 	}
@@ -308,14 +334,22 @@ func registerAdapterInventory(ctx context.Context, cfg config.Config, deviceRegi
 		capabilities := []domain.Capability{domain.CapabilityObserve}
 		deviceID := domain.DeviceID(configured.DeviceID)
 		endpointID := domain.EndpointID(configured.ID)
-		if _, err := deviceRegistry.Register(ctx, domain.Device{ID: deviceID, Name: "ESP32 sensor node", Capabilities: capabilities, Metadata: map[string]string{"adapter": "esp32"}}); err != nil {
+		deviceName := "ESP32 sensor node"
+		if definition, exists := deviceDefinitions[configured.DeviceID]; exists && definition.Name != "" {
+			deviceName = definition.Name
+		}
+		if _, err := deviceRegistry.Register(ctx, domain.Device{ID: deviceID, Name: deviceName, Capabilities: capabilities, Metadata: map[string]string{"adapter": "esp32"}}); err != nil {
 			return err
 		}
 		if _, err := deviceRegistry.RegisterEndpoint(ctx, domain.Endpoint{ID: endpointID, DeviceID: deviceID, Name: "ESP32 dual-probe endpoint", Capabilities: capabilities}); err != nil {
 			return err
 		}
 		for index, probeID := range configured.ProbeIDs {
-			if _, err := sensorRegistry.Register(ctx, domain.Sensor{ID: domain.SensorID(probeID), DeviceID: deviceID, EndpointID: endpointID, Name: fmt.Sprintf("Temperature probe %d", index+1), Quantity: domain.QuantityTemperature, Unit: domain.UnitCelsius, Capabilities: capabilities, Metadata: map[string]string{"adapter": "esp32"}}); err != nil {
+			sensorName := fmt.Sprintf("Temperature probe %d", index+1)
+			if definition, exists := sensorDefinitions[probeID]; exists && definition.Name != "" {
+				sensorName = definition.Name
+			}
+			if _, err := sensorRegistry.Register(ctx, domain.Sensor{ID: domain.SensorID(probeID), DeviceID: deviceID, EndpointID: endpointID, Name: sensorName, Quantity: domain.QuantityTemperature, Unit: domain.UnitCelsius, Capabilities: capabilities, Metadata: map[string]string{"adapter": "esp32"}}); err != nil {
 				return err
 			}
 		}

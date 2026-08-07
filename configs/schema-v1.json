@@ -158,6 +158,18 @@
         "required_probe_ids": { "type": "array", "maxItems": 2, "uniqueItems": true, "items": { "$ref": "#/$defs/uuid" } }
       }
     },
+    "alarms": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "rules": { "type": "array", "items": { "$ref": "#/$defs/alarmRule" } } }
+    },
+    "backups": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "destination": { "type": "string" },
+        "retention_days": { "type": "integer", "minimum": 1, "maximum": 3650 }
+      }
+    },
     "esp32Endpoint": {
       "type": "object", "additionalProperties": false,
       "required": ["id", "device_id", "alarm_rule_id", "base_url", "probe_ids", "poll_interval", "request_timeout", "fresh_for", "maximum_clock_skew", "maximum_difference_celsius"],
@@ -171,19 +183,60 @@
     },
     "device": {
       "type": "object", "additionalProperties": false, "required": ["id"],
-      "properties": { "id": { "$ref": "#/$defs/id" } }
+      "properties": {
+        "id": { "$ref": "#/$defs/id" }, "entity_id": { "$ref": "#/$defs/uuid" },
+        "name": { "type": "string" }, "description": { "type": "string" },
+        "manufacturer": { "type": "string" }, "model": { "type": "string" }, "firmware": { "type": "string" },
+        "metadata": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
     },
     "sensor": {
       "type": "object", "additionalProperties": false, "required": ["id", "device_id", "unit"],
       "properties": {
-        "id": { "$ref": "#/$defs/id" }, "device_id": { "$ref": "#/$defs/id" },
+        "id": { "$ref": "#/$defs/id" }, "entity_id": { "$ref": "#/$defs/uuid" }, "device_id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string" }, "quantity": { "type": "string" },
         "unit": { "enum": ["celsius", "fahrenheit", "pH", "ppt", "liters_per_hour", "boolean"] },
-        "minimum": { "type": "number" }, "maximum": { "type": "number" }
+        "minimum": { "type": "number" }, "maximum": { "type": "number" },
+        "calibration": { "$ref": "#/$defs/calibration" }
       }
     },
     "equipment": {
       "type": "object", "additionalProperties": false, "required": ["id", "device_id"],
-      "properties": { "id": { "$ref": "#/$defs/id" }, "device_id": { "$ref": "#/$defs/id" } }
+      "properties": {
+        "id": { "$ref": "#/$defs/id" }, "entity_id": { "$ref": "#/$defs/uuid" }, "device_id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string" }, "kind": { "enum": ["outlet", "heater", "return-pump", "circulation-pump", "dosing-pump", "light", "ato"] },
+        "capabilities": { "type": "array", "uniqueItems": true, "items": { "enum": ["observe", "switch", "variable-output", "command-acknowledgement", "reported-state", "power-telemetry"] } },
+        "hazardous": { "type": "boolean" }, "fail_safe_on": { "type": "boolean" },
+        "maximum_on": { "type": "string" }, "maximum_daily_on": { "type": "string" }, "minimum_off": { "type": "string" },
+        "commissioning": { "$ref": "#/$defs/commissioning" }
+      }
+    },
+    "calibration": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" }, "scale": { "type": "number" }, "offset": { "type": "number" },
+        "reference": { "type": "string" }, "calibrated_by": { "type": "string" }, "calibrated_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "commissioning": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "stage": { "enum": ["uncommissioned", "discovered", "mapped", "configured", "validated", "bench-tested", "commissioned", "disabled"] },
+        "safe_test_load": { "type": "boolean" }, "fail_safe_state_verified": { "type": "boolean" },
+        "power_return_verified": { "type": "boolean" }, "independent_safeguard_present": { "type": "boolean" },
+        "verified_by": { "type": "string" }, "verified_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "alarmRule": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "name", "sensor_id", "condition", "severity", "delay", "clear_delay"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" }, "name": { "type": "string", "minLength": 1 }, "sensor_id": { "$ref": "#/$defs/id" },
+        "condition": { "enum": ["above", "below", "outside", "true", "false"] },
+        "threshold": { "type": "number" }, "threshold_high": { "type": "number" },
+        "severity": { "enum": ["info", "warning", "critical"] }, "delay": { "type": "string" }, "clear_delay": { "type": "string" },
+        "latching": { "type": "boolean" }, "notifications": { "type": "array", "uniqueItems": true, "items": { "enum": ["home-assistant", "mqtt", "log"] } }
+      }
     }
   }
 }
