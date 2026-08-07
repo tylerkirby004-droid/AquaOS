@@ -1,11 +1,22 @@
-# Raspberry Pi OS Lite foundation deployment
+# Dedicated Control VM foundation deployment
 
-This is the minimal v0.1 deployment for a Raspberry Pi 4B running Raspberry Pi
-OS Lite 64-bit. It does not enable live aquarium loads and is not a guided
-installer. Use the broker-free simulator configuration until later safety and
-bench milestones pass.
+This is the minimal native systemd deployment for a dedicated minimal Linux
+amd64 AquaOS Control VM on Proxmox. It does not enable live aquarium loads and
+is not the guided installer or Admin GUI planned for later milestones. Use the
+broker-free simulator configuration until the Prompt 8 safety and bench gates
+pass.
 
-## Prepare the artifact
+Do not install AquaOS directly on the Proxmox host. Docker, MQTT, Home
+Assistant, storage, AI, Internet access, and the Raspberry Pi display are not
+required for this Core service.
+
+## Prepare the Control VM and artifact
+
+Create a dedicated supported minimal Linux amd64 VM with bridged LAN networking.
+Use a reserved/static address, configure automatic Proxmox startup ahead of
+noncritical guests, and include the host and required network infrastructure in
+UPS planning. The Edition 1.2 initial resource estimate is 1–2 vCPU, 1–2 GB RAM,
+and 8–16 GB disk; revise it only from measured soak evidence.
 
 Run on: developer workstation
 
@@ -13,19 +24,19 @@ Run on: developer workstation
 make build-all
 ```
 
-Expected result: `bin/aquaos-linux-arm64` and
-`bin/aquaos-healthcheck-linux-arm64` exist. Copy them, `configs/aquaos.yaml`, and
-`deployments/systemd/aquaos.service` to the Pi using your normal secure transfer
+Expected result: `bin/aquaos-linux-amd64` and
+`bin/aquaos-healthcheck-linux-amd64` exist. Copy them, `configs/aquaos.yaml`, and
+`deployments/systemd/aquaos.service` to the Control VM using a secure transfer
 method. Verify release checksums when release artifacts become available.
 
 ## Install the foundation service
 
-Run on: Raspberry Pi control node
+Run on: AquaOS Control VM
 
 ```sh
 sudo useradd --system --home /var/lib/aquaos --create-home --shell /usr/sbin/nologin aquaos
-sudo install -o root -g root -m 0755 aquaos-linux-arm64 /usr/local/bin/aquaos
-sudo install -o root -g root -m 0755 aquaos-healthcheck-linux-arm64 /usr/local/bin/aquaos-healthcheck
+sudo install -o root -g root -m 0755 aquaos-linux-amd64 /usr/local/bin/aquaos
+sudo install -o root -g root -m 0755 aquaos-healthcheck-linux-amd64 /usr/local/bin/aquaos-healthcheck
 sudo install -d -o root -g aquaos -m 0750 /etc/aquaos
 sudo install -o root -g aquaos -m 0640 aquaos.yaml /etc/aquaos/aquaos.yaml
 sudo install -o root -g root -m 0644 aquaos.service /etc/systemd/system/aquaos.service
@@ -35,43 +46,44 @@ sudo systemctl enable --now aquaos.service
 
 Expected result: `systemctl status aquaos.service` reports `active (running)`.
 The sample configuration binds HTTP to localhost, enables only the
-hardware-incapable foundation simulator, and leaves MQTT disabled.
+hardware-incapable simulator, and leaves MQTT disabled.
 
 ## Verify locally
 
-Run on: Raspberry Pi control node
+Run on: AquaOS Control VM
 
 ```sh
 /usr/local/bin/aquaos-healthcheck -url http://localhost:8080/health/ready
-sudo systemctl stop aquaos.service
-sudo systemctl start aquaos.service
+sudo systemctl restart aquaos.service
 /usr/local/bin/aquaos-healthcheck -url http://localhost:8080/health/ready
 ```
 
 Expected result: both health checks exit successfully and the journal shows an
-ordered, bounded shutdown followed by clean startup. Stop here if verification
-fails. Do not connect or enable live loads.
+ordered, bounded shutdown followed by clean startup. Also verify automatic
+service startup after a Control VM reboot and automatic VM startup after a
+controlled Proxmox stop/start. Stop if any checkpoint fails. Do not connect or
+enable live loads.
 
-## Hardware watchdog guidance
+## Supervision and physical failure boundary
 
-Raspberry Pi hardware-watchdog configuration is platform and bootloader
-dependent. Before bench use, confirm the current Raspberry Pi OS documentation,
-enable the hardware watchdog deliberately, and test forced process and Pi
-failure using only the simulator and safe test loads. Do not set systemd
-`WatchdogSec` for AquaOS yet: the v0.1 process does not implement `sd_notify`, so
-doing so would create a restart loop rather than a valid watchdog guarantee.
+The supplied unit has bounded restart and shutdown behavior. Do not set systemd
+`WatchdogSec` yet: the process does not implement `sd_notify`, so enabling it
+would create a restart loop rather than a valid watchdog guarantee.
 
-The later Shelly/ESP32 bench milestone must verify process restart, Pi restart,
-watchdog recovery, network loss, and independent physical heater cutoffs before
-any livestock or live heater depends on AquaOS.
+Neither systemd nor a VM protects against physical Proxmox-host failure.
+Independent physical equipment safeguards remain mandatory. Before future live
+use, prove configuration and VM restore onto replacement hardware and maintain
+an emergency recovery runbook. Full supported backup/restore, upgrade/rollback,
+repair, and installer workflows belong to Edition 1.2 Prompt 12.
 
 ## Rollback
 
-Run on: Raspberry Pi control node
+Run on: AquaOS Control VM
 
 ```sh
 sudo systemctl disable --now aquaos.service
 ```
 
-Expected result: AquaOS is stopped and disabled. Because v0.1 has no equipment
-behavior, rollback cannot leave a partially enabled AquaOS output path.
+Expected result: AquaOS is stopped and disabled. Prompts 1–7 include no real
+hardware adapter, so this foundation rollback cannot leave an AquaOS output
+path enabled.

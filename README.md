@@ -1,8 +1,9 @@
 # AquaOS
 
 AquaOS is a local-first, safety-first reef aquarium control platform. AquaOS
-Core is an authoritative Go process intended for Raspberry Pi OS Lite 64-bit on
-a Raspberry Pi 4B. It will validate sensor data, apply deterministic safety
+Core is an authoritative Go process whose primary production target is a
+dedicated minimal Linux amd64 AquaOS Control VM on Proxmox, running natively
+under systemd. It will validate sensor data, apply deterministic safety
 policy, manage equipment state machines, issue commands through local hardware
 adapters, reconcile reported state, raise alarms, and expose local APIs.
 
@@ -13,19 +14,22 @@ adapters, reconcile reported state, raise alarms, and expose local APIs.
 > safety gates pass.
 
 The governing project specification is the checked-in
-[AquaOS Development Bible, Edition 1.1](docs/AquaOS_Development_Bible.docx).
+[AquaOS Development Bible, Edition 1.2](docs/AquaOS_Development_Bible_Edition_1.2.docx).
+The older Edition 1.1 file remains only as historical context for Prompts 1–7.
 
 ## Authority and failure boundary
 
 ```text
-ESP32/Shelly local adapters
-           |
-           v
-     AquaOS Core on Pi  <---->  local API
-           |
-           +---- optional MQTT ---- Home Assistant / integrations
-           +---- optional storage - InfluxDB / Grafana
-           +---- optional AI ------ observations only
+Shelly / Ethernet-PoE ESP32 devices on the local LAN
+                         |
+                         v
+       AquaOS Core in dedicated Control VM <----> local API
+                         |
+                         +---- optional MQTT ---- Home Assistant / integrations
+                         +---- optional storage - InfluxDB / Grafana
+                         +---- optional AI ------ observations only
+
+Optional Raspberry Pi display/kiosk ---- reads status and dashboards only
 ```
 
 AquaOS Core is the authoritative controller. MQTT is the primary external
@@ -35,6 +39,19 @@ Home Assistant routes all control and configuration requests through AquaOS
 Core. Optional storage, dashboards, remote servers, Internet access, and AI are
 outside the critical control path. Reef-Pi is reserved for possible future
 compatibility and is not the baseline hardware authority.
+
+Docker is supported only for noncritical development and integration work; it
+is not a production dependency for AquaOS Core. The display Pi is likewise
+noncritical. A physical Proxmox-host failure does stop the Control VM, so
+independent equipment safeguards, appropriate UPS coverage, automatic VM and
+service startup, tested backups/restores, and replacement-host recovery remain
+mandatory operational controls. AquaOS must never be installed directly on the
+Proxmox host.
+
+Home Assistant is the normal operational UI. The future AquaOS Admin GUI is for
+installation, configuration, diagnostics, backup/restore, upgrades, rollback,
+and repair. It is non-authoritative: every mutation must pass through
+authenticated AquaOS APIs/application services and existing safety policy.
 
 ## Foundation architecture
 
@@ -120,13 +137,13 @@ changes are rejected with restart reasons and leave the active digest and
 snapshot unchanged. See [docs/configuration.md](docs/configuration.md) and
 [configs/schema-v1.json](configs/schema-v1.json).
 
-## Raspberry Pi OS Lite foundation deployment
+## Native Control VM foundation deployment
 
-The minimal arm64 binary, sample configuration, hardened systemd unit, local
-verification command, rollback, and hardware-watchdog guidance are documented
+The Linux amd64 binary, sample configuration, hardened systemd unit, local
+verification command, rollback, and host-failure guidance are documented
 in [deployments/systemd/README.md](deployments/systemd/README.md). This is a
-manual foundation deployment, not the guided multi-server installer scheduled
-for a later milestone.
+manual dedicated-Control-VM deployment, not the guided installer, Admin GUI,
+or full backup/restore system scheduled for later milestones.
 
 ## Repository layout
 
@@ -145,7 +162,7 @@ for a later milestone.
 - `internal/output` — sole validated command, acknowledgement, and reconciliation path
 - `internal/safety` — operating modes, interlocks, overrides, and watchdog policy
 - `internal/adapters/{shelly,esp32,simulator}` — adapter boundaries
-- `deployments/systemd` — minimal Pi OS Lite foundation deployment
+- `deployments/systemd` — minimal native Linux Control VM deployment
 - `docs/adr` — architecture decision records
 - `configs` — non-secret example configurations
 
@@ -166,9 +183,10 @@ make lint
 make build-all
 ```
 
-`make build-all` produces Linux amd64 and arm64 AquaOS binaries plus the arm64
-local verification helper. CI runs formatting, vet, staticcheck, golangci-lint,
-race-enabled tests, coverage, and both target builds.
+`make build-all` produces primary Linux amd64 and portability Linux arm64
+AquaOS, verification-helper, and simulator binaries. CI runs formatting, vet,
+staticcheck, golangci-lint, race-enabled tests, coverage, and both Core target
+builds.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and
 [AGENTS.md](AGENTS.md) before making changes. Licensed under the

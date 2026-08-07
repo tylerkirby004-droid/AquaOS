@@ -1,8 +1,9 @@
 # Hardware baseline
 
-The governing Edition 1.1 bench direction is:
+The governing Edition 1.2 bench direction is:
 
-- Raspberry Pi 4B running Raspberry Pi OS Lite 64-bit and AquaOS Core;
+- dedicated minimal Linux amd64 AquaOS Control VM on Proxmox, with AquaOS Core
+  running natively under systemd;
 - Ethernet/PoE ESP32 sensor node with two independently identified waterproof
   DS18B20 probes;
 - Shelly Plug US Gen4 outputs using direct local control;
@@ -10,6 +11,12 @@ The governing Edition 1.1 bench direction is:
 - independent physical high-temperature protection for each future heater
   channel.
 
-No hardware behavior is implemented in Prompt 1. Exact wiring, firmware,
-protocol, cutoff choice/setpoint, and Atlas Scientific chemistry integration
-require later bench evidence and ADRs. Do not infer them from legacy files.
+The Raspberry Pi 4B is an optional fish-room display/kiosk only. The display Pi,
+Docker, MQTT, Home Assistant, storage, AI, and Internet access are not in the
+critical control path. A Proxmox host failure does stop Core and must be
+mitigated operationally rather than obscured.
+
+No production adapter behavior was implemented in Prompts 1–7. Exact wiring,
+firmware, protocol, cutoff choice/setpoint, and Atlas Scientific chemistry
+integration require later bench evidence and ADRs. Do not infer them from
+legacy files.

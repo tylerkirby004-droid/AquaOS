@@ -1,3 +1,6 @@
+# Development/integration convenience only. Production AquaOS Core runs natively
+# under systemd in its dedicated Linux amd64 Control VM and does not depend on
+# Docker or Mosquitto for critical local control.
 services:
   aquaos:
     build: .
@@ -5,14 +8,11 @@ services:
     environment:
       AQUAOS_HTTP_ADDRESS: ":8080"
       AQUAOS_MQTT_BROKER: tcp://mosquitto:1883
-      AQUAOS_MQTT_ENABLED: "true"
+      AQUAOS_MQTT_ENABLED: "false"
       AQUAOS_MQTT_USERNAME: ${MQTT_AQUAOS_USERNAME:-}
       AQUAOS_MQTT_PASSWORD: ${MQTT_AQUAOS_PASSWORD:-}
     ports:
       - "8080:8080"
-    depends_on:
-      mosquitto:
-        condition: service_started
     healthcheck:
       test: ["CMD", "/usr/local/bin/healthcheck", "-url", "http://localhost:8080/health/ready"]
       interval: 30s

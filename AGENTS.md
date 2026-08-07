@@ -1,5 +1,26 @@
 # AquaOS Development Rules
 
+The governing specification is `docs/AquaOS_Development_Bible_Edition_1.2.docx`.
+Prompts 1–7 predate its post-Prompt-7 deployment pivot and must not be rewritten
+solely because the production host changed.
+
+AquaOS Core's primary production target is Linux amd64 in a dedicated minimal
+AquaOS Control VM on Proxmox, running natively under systemd. Never install
+AquaOS directly on the Proxmox host or make Docker part of the critical control
+path.
+
+The Raspberry Pi 4B is an optional display/kiosk only. Its failure, and failure
+of MQTT, Home Assistant, InfluxDB, Grafana, Node-RED, AI, Internet access, or any
+Admin GUI, must not prevent critical local control.
+
+Home Assistant is the daily operational UI. The separate AquaOS Admin GUI is
+non-authoritative: every mutation must use authenticated AquaOS APIs/application
+services and existing validation and safety policy.
+
+Do not obscure the Proxmox host failure domain. Production guidance must include
+independent physical equipment safeguards, UPS planning, automatic VM/service
+startup, tested backups/restores, and replacement-host recovery.
+
 Never sacrifice reliability for convenience.
 
 Never introduce breaking architectural changes without documenting why.
