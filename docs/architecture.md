@@ -1,34 +1,34 @@
 # AquaOS architecture
 
-## System boundaries
+The governing source is the checked-in AquaOS Development Bible, Edition 1.1.
+This page is a compact orientation, not an alternate specification.
+
+## Authority boundary
 
 ```text
-Equipment <-> Reef-Pi + Robo-Tank <-> MQTT <-> AquaOS services
-                 |                                  |
-          local safety logic               dashboards, history, automation, AI
+physical state
+    -> direct local adapter observation
+    -> validated canonical state
+    -> safety engine and equipment state machine
+    -> sole output manager
+    -> direct local device command
+    -> reported-state reconciliation
 ```
 
-The Raspberry Pi controller owns equipment states, sensor polling, and safety fallbacks. It must have sensible local schedules and thresholds that work when MQTT, networking, or the server is unavailable.
+AquaOS Core on a Raspberry Pi 4B is the authoritative local controller. The
+baseline future adapters are Ethernet/PoE ESP32 sensor nodes and Shelly Plug US
+Gen4 outputs. Reef-Pi is only a possible future compatibility adapter.
 
-## Server services
+MQTT, Home Assistant, InfluxDB, Grafana, remote servers, Internet access, and AI
+are outside the critical control path. Losing all of them must not stop local
+sensing, safety evaluation, output control, or reconciliation. UI and external
+commands are requests that must pass through AquaOS Core policy.
 
-| Service | Responsibility | Failure impact |
-| --- | --- | --- |
-| Mosquitto | Message transport | Telemetry/remote integrations unavailable; controller continues locally |
-| InfluxDB | Historical measurements | History temporarily unavailable |
-| Grafana | Long-term visualization | Visualization unavailable |
-| Node-RED | Non-critical orchestration | No server automations; controller safeguards remain active |
-| Home Assistant | UI, notifications, smart-home bridge | UI/notifications unavailable |
-| AI VM | Analysis and recommendations | No effect on equipment safety |
+## Foundation scope
 
-## Control policy
-
-Commands travelling from server services to equipment are requests, not safety authority. The controller must validate commands, use explicit allow-lists, enforce safe limits, and publish acknowledgements. AI never directly controls equipment.
-
-## Data flow
-
-1. Reef-Pi samples sensors and controls relays/PWM locally.
-2. A bridge publishes normalized retained state and telemetry to MQTT.
-3. Node-RED subscribes for integration and writes measurements to InfluxDB.
-4. Home Assistant and Grafana consume the same contract for user interfaces.
-5. AI consumes stored/read-only data and publishes recommendations under `aquaos/analysis/`.
+Prompt 1 supplies repository and runtime foundations. Prompt 2 adds strict
+configuration schema v1, semantic validation, redaction, active digests, atomic
+reload planning, bounded lifecycle orchestration, injected time, and health
+that distinguishes liveness, readiness, degradation, and failure. Neither
+milestone contains accepted equipment-control or safety behavior. Later code
+must use `internal/output` as the sole authorized equipment command path.

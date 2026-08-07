@@ -1,45 +1,36 @@
 # Local development
 
-You can develop the AquaOS data pipeline on a Windows computer before building the Proxmox server. This starts **simulated data only** and does not connect to aquarium equipment.
+## Safe foundation path
 
-## Prerequisites
+Run on: developer workstation
 
-- Docker Desktop with its Linux container engine running
-- A terminal in `infrastructure/docker`
-
-## First run
-
-```powershell
-Copy-Item .env.example .env
+```sh
+make bootstrap
 ```
 
-Edit `.env` and replace each placeholder password/token. The MQTT username needs to remain `reefpi` unless you also update the ACL and simulator environment.
+Expected result: the command verifies Go/config prerequisites, starts AquaOS
+with MQTT disabled and the hardware-incapable simulator enabled, confirms
+readiness, then shuts every component down within the configured timeout.
 
-Create the broker password file. Enter the same password as `MQTT_REEFPI_PASSWORD` when prompted:
+For manual inspection, run:
 
-```powershell
-docker run --rm -it -v "${PWD}/mosquitto/config:/mosquitto/config" eclipse-mosquitto:2 mosquitto_passwd -c /mosquitto/config/passwd reefpi
-docker compose up --build -d
+```sh
+make run
 ```
 
-After one or two minutes, open Grafana at `http://localhost:3000`, sign in with user `admin` and `GRAFANA_ADMIN_PASSWORD`, then select **Dashboards → AquaOS → AquaOS Overview**.
+In another terminal:
 
-## What is running
-
-```text
-telemetry-simulator -> Mosquitto -> Telegraf -> InfluxDB -> Grafana
-                                     |
-                                     +-> Node-RED (available for workflow development)
+```sh
+go run ./cmd/healthcheck -url http://localhost:8080/health/ready
 ```
 
-The simulator publishes synthetic values every 15 seconds. It is intentionally distinct from any live controller. Remove `telemetry-simulator` from `compose.yaml` before configuring Reef-Pi.
+Expected result: the health check succeeds. Stop AquaOS with `Ctrl+C` and verify
+ordered shutdown logs. No live hardware may be connected during foundation
+development.
 
-## Development checks
+## Optional legacy integration stack
 
-```powershell
-docker compose ps
-docker compose logs telemetry-simulator telegraf --tail 50
-docker compose down
-```
-
-`docker compose down` retains named volumes and data. Add `--volumes` only when deliberately resetting local development data.
+The Compose files under `infrastructure/docker` are retained as noncritical
+integration experiments. They are not required by AquaOS Core, are not used by
+`make bootstrap`, and must not be treated as an active MQTT or equipment
+contract until the corresponding Development Bible prompts are completed.

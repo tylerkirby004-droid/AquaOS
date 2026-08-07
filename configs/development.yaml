@@ -1,0 +1,40 @@
+schema_version: 1
+
+application:
+  log_level: info
+  startup_timeout: 15s
+  shutdown_timeout: 5s
+  component_timeout: 2s
+  event_concurrency: 64
+
+http:
+  # Port zero prevents collisions and keeps the bootstrap listener local-only.
+  address: "localhost:0"
+  read_timeout: 2s
+  write_timeout: 2s
+  idle_timeout: 10s
+
+mqtt:
+  # The foundation verification must succeed without a broker.
+  enabled: false
+  site_id: development
+  broker: ""
+  client_id: ""
+  connect_timeout: 2s
+  keep_alive: 30s
+  disconnect_quiesce: 250ms
+  required_for_ready: false
+  maximum_payload: 262144
+  queue_capacity: 64
+  idempotency_capacity: 1024
+  reconnect_minimum: 1s
+  reconnect_maximum: 30s
+  reconnect_jitter: 0.2
+
+simulator:
+  enabled: true
+
+inventory:
+  devices: []
+  sensors: []
+  equipment: []

@@ -4,3 +4,11 @@ data/
 mosquitto/passwd
 __pycache__/
 .venv/
+bin/
+coverage.out
+*.test
+.idea/
+.vscode/
+configs/local.yaml
+.tmp-*/
+.tmp-*.zip

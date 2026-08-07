@@ -1,0 +1,43 @@
+schema_version: 1
+
+application:
+  log_level: info
+  startup_timeout: 30s
+  shutdown_timeout: 15s
+  component_timeout: 5s
+  event_concurrency: 64
+
+http:
+  address: "localhost:8080"
+  read_timeout: 5s
+  write_timeout: 10s
+  idle_timeout: 60s
+
+mqtt:
+  # MQTT is optional external integration and is not in the critical control path.
+  enabled: false
+  site_id: home-reef
+  broker: tcp://localhost:1883
+  client_id: aquaos
+  connect_timeout: 10s
+  keep_alive: 30s
+  disconnect_quiesce: 250ms
+  required_for_ready: true
+  maximum_payload: 262144
+  queue_capacity: 256
+  idempotency_capacity: 4096
+  reconnect_minimum: 1s
+  reconnect_maximum: 1m
+  reconnect_jitter: 0.2
+
+simulator:
+  # Foundation-only lifecycle adapter; it cannot reach or command real hardware.
+  enabled: true
+
+inventory:
+  devices: []
+  sensors: []
+  equipment: []
+
+# Credentials are intentionally omitted. Supply AQUAOS_MQTT_USERNAME and
+# AQUAOS_MQTT_PASSWORD through the process environment or a secrets manager.
