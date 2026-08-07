@@ -102,6 +102,10 @@ Prompt 9 adds the authenticated, versioned REST boundary used by integrations
 and the future non-authoritative Admin GUI. See [docs/rest-api.md](docs/rest-api.md)
 and [docs/openapi-v1.yaml](docs/openapi-v1.yaml).
 
+Prompt 10 adds optional Home Assistant MQTT Discovery and a narrow command
+bridge that always routes through the Core output service. See
+[docs/home-assistant.md](docs/home-assistant.md).
+
 ## Safe development startup
 
 Requirements:

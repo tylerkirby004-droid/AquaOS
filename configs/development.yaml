@@ -34,6 +34,10 @@ mqtt:
   reconnect_minimum: 1s
   reconnect_maximum: 30s
   reconnect_jitter: 0.2
+  home_assistant:
+    enabled: false
+    command_ttl: 10s
+    tombstones: []
 
 simulator:
   enabled: true

@@ -30,6 +30,7 @@ const (
 )
 
 var identifierPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
+var haIdentifierPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 
 // Config is the complete externally supplied AquaOS configuration.
 type Config struct {
@@ -82,6 +83,20 @@ type MQTT struct {
 	ReconnectMinimum    time.Duration `yaml:"reconnect_minimum" json:"reconnectMinimum"`
 	ReconnectMaximum    time.Duration `yaml:"reconnect_maximum" json:"reconnectMaximum"`
 	ReconnectJitter     float64       `yaml:"reconnect_jitter" json:"reconnectJitter"`
+	HomeAssistant       HomeAssistant `yaml:"home_assistant" json:"homeAssistant"`
+}
+
+// HomeAssistant configures the optional, non-authoritative MQTT integration.
+type HomeAssistant struct {
+	Enabled    bool                     `yaml:"enabled" json:"enabled"`
+	CommandTTL time.Duration            `yaml:"command_ttl" json:"commandTtl"`
+	Tombstones []HomeAssistantTombstone `yaml:"tombstones" json:"tombstones"`
+}
+
+// HomeAssistantTombstone explicitly removes one obsolete retained entity.
+type HomeAssistantTombstone struct {
+	Component string `yaml:"component" json:"component"`
+	ObjectID  string `yaml:"object_id" json:"objectId"`
 }
 
 // Simulator configures the hardware-incapable simulator adapter.
@@ -191,7 +206,7 @@ func Defaults() Config {
 		SchemaVersion: CurrentSchemaVersion,
 		Application:   Application{LogLevel: "info", StartupTimeout: 30 * time.Second, ShutdownTimeout: 15 * time.Second, ComponentTimeout: 5 * time.Second, EventConcurrency: 64},
 		HTTP:          HTTP{Address: "localhost:8080", ReadTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second, MaximumRequestBytes: 64 * 1024, MutationRate: 10, MutationBurst: 20},
-		MQTT:          MQTT{ConnectTimeout: 10 * time.Second, KeepAlive: 30 * time.Second, DisconnectQuiesce: 250 * time.Millisecond, MaximumPayload: 256 * 1024, QueueCapacity: 256, IdempotencyCapacity: 4096, ReconnectMinimum: time.Second, ReconnectMaximum: time.Minute, ReconnectJitter: 0.2},
+		MQTT:          MQTT{ConnectTimeout: 10 * time.Second, KeepAlive: 30 * time.Second, DisconnectQuiesce: 250 * time.Millisecond, MaximumPayload: 256 * 1024, QueueCapacity: 256, IdempotencyCapacity: 4096, ReconnectMinimum: time.Second, ReconnectMaximum: time.Minute, ReconnectJitter: 0.2, HomeAssistant: HomeAssistant{CommandTTL: 10 * time.Second}},
 		Simulator:     Simulator{Enabled: true},
 	}
 }
@@ -374,6 +389,17 @@ func (c Config) Validate() error {
 		}
 		if c.MQTT.ReconnectJitter < 0 || c.MQTT.ReconnectJitter > 0.5 {
 			return validationError("mqtt.reconnect_jitter", "out_of_range", "must be between 0 and 0.5")
+		}
+	}
+	if c.MQTT.HomeAssistant.Enabled && !c.MQTT.Enabled {
+		return validationError("mqtt.home_assistant.enabled", "dependency_disabled", "requires MQTT to be enabled")
+	}
+	if c.MQTT.HomeAssistant.CommandTTL <= 0 || c.MQTT.HomeAssistant.CommandTTL > time.Minute {
+		return validationError("mqtt.home_assistant.command_ttl", "out_of_range", "must be greater than zero and at most 1m")
+	}
+	for index, item := range c.MQTT.HomeAssistant.Tombstones {
+		if !haIdentifierPattern.MatchString(item.Component) || !identifierPattern.MatchString(item.ObjectID) {
+			return validationError(fmt.Sprintf("mqtt.home_assistant.tombstones[%d]", index), "invalid_id", "component or object_id is invalid")
 		}
 	}
 	if err := c.validateAdapters(); err != nil {
@@ -616,6 +642,7 @@ func (c Config) Digest() (string, error) {
 // Clone returns a deep copy safe for use as an immutable snapshot.
 func (c Config) Clone() Config {
 	cloned := c
+	cloned.MQTT.HomeAssistant.Tombstones = append([]HomeAssistantTombstone(nil), c.MQTT.HomeAssistant.Tombstones...)
 	cloned.Inventory.Devices = append([]Device(nil), c.Inventory.Devices...)
 	cloned.Inventory.Sensors = append([]Sensor(nil), c.Inventory.Sensors...)
 	for index := range cloned.Inventory.Sensors {

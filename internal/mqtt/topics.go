@@ -10,6 +10,7 @@ import (
 const contractMajorVersion = "v1"
 
 var topicSegmentPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
+var haComponentPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 
 // Purpose identifies one stable public MQTT contract.
 type Purpose string
@@ -27,6 +28,7 @@ const (
 	PurposeEventStream       Purpose = "event-stream"
 	PurposeAIObservation     Purpose = "ai-observation"
 	PurposeHADiscovery       Purpose = "ha-discovery"
+	PurposeHACommand         Purpose = "ha-command"
 )
 
 // Policy fixes delivery semantics for a public topic.
@@ -34,6 +36,19 @@ type Policy struct {
 	Purpose  Purpose `json:"purpose"`
 	QoS      byte    `json:"qos"`
 	Retained bool    `json:"retained"`
+}
+
+// HACommand returns the non-retained Home Assistant command bridge topic.
+func (r *Registry) HACommand(equipmentID string) (string, Policy, error) {
+	if !topicSegmentPattern.MatchString(equipmentID) {
+		return "", Policy{}, errors.New("equipment ID for Home Assistant must be one lowercase kebab-case segment")
+	}
+	return fmt.Sprintf("aquaos/%s/%s/home-assistant/%s/set", r.siteID, contractMajorVersion, equipmentID), Policy{Purpose: PurposeHACommand, QoS: 1}, nil
+}
+
+// HAStatus returns the retained integration diagnostic and aggregate-alarm topic.
+func (r *Registry) HAStatus() (string, Policy) {
+	return fmt.Sprintf("aquaos/%s/%s/home-assistant/status", r.siteID, contractMajorVersion), Policy{Purpose: PurposeCoreStatus, QoS: 1, Retained: true}
 }
 
 // Registry generates versioned topics from an externally supplied site ID.
@@ -112,7 +127,7 @@ func (r *Registry) AIObservation(service, kind string) (string, Policy, error) {
 // HADiscovery returns the retained Home Assistant discovery contract. Entity
 // generation and cleanup remain Prompt 10 responsibilities.
 func (r *Registry) HADiscovery(component, objectID string) (string, Policy, error) {
-	if !topicSegmentPattern.MatchString(component) || !topicSegmentPattern.MatchString(objectID) {
+	if !haComponentPattern.MatchString(component) || !topicSegmentPattern.MatchString(objectID) {
 		return "", Policy{}, errors.New("component and object ID for Home Assistant must be lowercase kebab-case")
 	}
 	return fmt.Sprintf("homeassistant/%s/%s/config", component, objectID), Policy{Purpose: PurposeHADiscovery, QoS: 1, Retained: true}, nil
@@ -127,6 +142,8 @@ func (r *Registry) SubscriptionFilter(purpose Purpose) (string, byte, error) {
 		return root + "/commands/+/request", 1, nil
 	case PurposeAIObservation:
 		return root + "/ai/+/observations/+", 1, nil
+	case PurposeHACommand:
+		return root + "/home-assistant/+/set", 1, nil
 	default:
 		return "", 0, errors.New("purpose has no wildcard subscription contract")
 	}

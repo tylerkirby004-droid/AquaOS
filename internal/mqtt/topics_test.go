@@ -34,6 +34,24 @@ func TestTopicContract(t *testing.T) {
 	}
 }
 
+func TestHomeAssistantCommandTopicIsNarrowAndNotRetained(t *testing.T) {
+	registry, err := NewRegistry("home-reef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	topic, policy, err := registry.HACommand("heater-one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if topic != "aquaos/home-reef/v1/home-assistant/heater-one/set" || policy.QoS != 1 || policy.Retained {
+		t.Fatalf("topic=%q policy=%+v", topic, policy)
+	}
+	filter, qos, err := registry.SubscriptionFilter(PurposeHACommand)
+	if err != nil || filter != "aquaos/home-reef/v1/home-assistant/+/set" || qos != 1 {
+		t.Fatalf("filter=%q qos=%d err=%v", filter, qos, err)
+	}
+}
+
 func TestRegistryRejectsWildcardsAndInvalidSite(t *testing.T) {
 	if _, err := NewRegistry("Home Reef"); err == nil {
 		t.Fatal("invalid site accepted")

@@ -33,6 +33,10 @@ mqtt:
   reconnect_minimum: 1s
   reconnect_maximum: 1m
   reconnect_jitter: 0.2
+  home_assistant:
+    enabled: false
+    command_ttl: 10s
+    tombstones: []
 
 simulator:
   # Foundation-only lifecycle adapter; it cannot reach or command real hardware.

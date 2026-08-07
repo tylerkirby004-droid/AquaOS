@@ -138,6 +138,14 @@ func TestDecodeCandidateRejectsInlineSecret(t *testing.T) {
 	}
 }
 
+func TestHomeAssistantRequiresMQTT(t *testing.T) {
+	cfg := Defaults()
+	cfg.MQTT.HomeAssistant.Enabled = true
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Home Assistant validated without MQTT")
+	}
+}
+
 func TestDigestIsStableAndSecretIndependent(t *testing.T) {
 	cfg := Defaults()
 	cfg.MQTT.Password = "one"

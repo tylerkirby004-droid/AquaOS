@@ -38,6 +38,10 @@ diagnostics replace it with `[REDACTED]`. The active SHA-256 digest is computed
 from redacted canonical JSON, so it identifies operational configuration
 without becoming a verifier for secret guesses.
 
+`mqtt.home_assistant` controls the optional discovery bridge. `command_ttl`
+bounds UI-originated commands. `tombstones` explicitly clear retained entities
+removed across a process restart; see [home-assistant.md](home-assistant.md).
+
 ## Prompt 8 direct adapters
 
 `adapters.shelly` and `adapters.esp32` are disabled by default. Enabling either

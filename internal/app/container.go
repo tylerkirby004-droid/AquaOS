@@ -26,6 +26,7 @@ import (
 	"github.com/tylerkirby004-droid/aquaos/internal/equipment"
 	"github.com/tylerkirby004-droid/aquaos/internal/events"
 	"github.com/tylerkirby004-droid/aquaos/internal/health"
+	"github.com/tylerkirby004-droid/aquaos/internal/integrations/homeassistant"
 	"github.com/tylerkirby004-droid/aquaos/internal/lifecycle"
 	"github.com/tylerkirby004-droid/aquaos/internal/mqtt"
 	"github.com/tylerkirby004-droid/aquaos/internal/output"
@@ -57,6 +58,7 @@ type Container struct {
 	Shelly        *shelly.Adapter
 	ESP32         *esp32.Adapter
 	Bench         *bench.Coordinator
+	HomeAssistant *homeassistant.Manager
 }
 
 // Option customizes composition-root infrastructure without introducing globals.
@@ -193,12 +195,27 @@ func New(cfg config.Config, configPath string, logger *slog.Logger, supplied ...
 
 	monitored := []health.Component{eventBus, configurationManager, deviceRegistry, sensorManager, equipmentManager, stateManager, safetyEngine, outputService, alarmManager, storageManager}
 	var mqttClient mqtt.MQTTClient
+	var mqttConcrete *mqtt.Client
+	var homeAssistant *homeassistant.Manager
 	if cfg.MQTT.Enabled {
-		mqttClient, err = mqtt.New(cfg.MQTT, logger.With("component", "mqtt"))
+		mqttConcrete, err = mqtt.New(cfg.MQTT, logger.With("component", "mqtt"))
 		if err != nil {
 			return nil, fmt.Errorf("construct MQTT client: %w", err)
 		}
+		mqttClient = mqttConcrete
 		monitored = append(monitored, mqttClient)
+		if cfg.MQTT.HomeAssistant.Enabled {
+			tombstones := make([]homeassistant.Tombstone, 0, len(cfg.MQTT.HomeAssistant.Tombstones))
+			for _, item := range cfg.MQTT.HomeAssistant.Tombstones {
+				tombstones = append(tombstones, homeassistant.Tombstone{Component: item.Component, ObjectID: item.ObjectID})
+			}
+			homeAssistant, err = homeassistant.New(homeassistant.Config{SiteID: cfg.MQTT.SiteID, CommandTTL: cfg.MQTT.HomeAssistant.CommandTTL, MaximumPayload: cfg.MQTT.MaximumPayload, Tombstones: tombstones}, mqttClient, homeassistant.RegistryInventory{DeviceRegistry: deviceRegistry, SensorRegistry: sensorManager, EquipmentRegistry: equipmentManager}, alarmManager, outputService, logger.With("component", "home-assistant"))
+			if err != nil {
+				return nil, fmt.Errorf("construct Home Assistant integration: %w", err)
+			}
+			mqttConcrete.SetReconciler(homeAssistant.Refresh)
+			monitored = append(monitored, homeAssistant)
+		}
 	}
 	var simulatorAdapter health.Component
 	if cfg.Simulator.Enabled {
@@ -217,9 +234,19 @@ func New(cfg config.Config, configPath string, logger *slog.Logger, supplied ...
 		if component == mqttClient && mqttClient != nil {
 			required = cfg.MQTT.RequiredForReady
 		}
+		if component == homeAssistant && homeAssistant != nil {
+			required = false
+		}
 		healthManager.RegisterComponent(component, required)
 	}
-	components := append([]health.Component{healthManager}, monitored...)
+	components := []health.Component{healthManager}
+	for _, component := range monitored {
+		if component == mqttClient || component == homeAssistant {
+			components = append(components, lifecycle.NewOptional(component, logger.With("component", "lifecycle")))
+		} else {
+			components = append(components, component)
+		}
+	}
 
 	return &Container{
 		Sensors: sensorManager, Equipment: equipmentManager, Alarms: alarmManager,
@@ -229,7 +256,7 @@ func New(cfg config.Config, configPath string, logger *slog.Logger, supplied ...
 		Lifecycle: lifecycle.NewConfigured(logger, lifecycle.Timeouts{
 			Startup: cfg.Application.StartupTimeout, Shutdown: cfg.Application.ShutdownTimeout, Component: cfg.Application.ComponentTimeout,
 		}, components...), Simulator: simulatorAdapter,
-		Shelly: shellyAdapter, ESP32: esp32Adapter, Bench: benchCoordinator,
+		Shelly: shellyAdapter, ESP32: esp32Adapter, Bench: benchCoordinator, HomeAssistant: homeAssistant,
 	}, nil
 }
 
