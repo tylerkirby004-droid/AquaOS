@@ -28,7 +28,12 @@ jobs:
       - name: Install Debian image tools
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends live-build debootstrap
+          sudo apt-get install --yes --no-install-recommends cpio debootstrap
+          curl --fail --location --output /tmp/live-build.deb \
+            https://deb.debian.org/debian/pool/main/l/live-build/live-build_20250505+deb13u1_all.deb
+          echo '58e09779881cbcc631c49ceb703413e0247a87db01823e597b2a1c40a2afd8f4  /tmp/live-build.deb' \
+            | sha256sum --check --strict
+          sudo dpkg --install /tmp/live-build.deb
       - name: Create isolated development signing identity
         run: |
           umask 077
