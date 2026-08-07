@@ -1,8 +1,13 @@
 # AquaOS installation guide
 
-This is the supported installation path for AquaOS. Use a **dedicated x86-64
-computer running Debian stable**. AquaOS is an appliance: do not install it on
-a daily-use desktop, NAS, hypervisor host, or Internet-facing server.
+The easiest path is the [bootable USB installation](usb-installation.md). It
+installs Debian and then hands configuration to a one-time browser wizard. This
+page documents the signed command-line path for recovery, development, or
+systems where the USB image cannot be used.
+
+Use a **dedicated x86-64 computer running Debian stable**. AquaOS is an
+appliance: do not install it on a daily-use desktop, NAS, hypervisor host, or
+Internet-facing server.
 
 The standard installation includes native AquaOS Core, its Admin GUI, Home
 Assistant, and Mosquitto. Home Assistant provides live values and built-in

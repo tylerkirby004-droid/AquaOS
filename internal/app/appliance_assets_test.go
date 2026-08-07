@@ -21,3 +21,30 @@ func TestApplianceInstallerPreservesCriticalBoundary(t *testing.T) {
 		t.Fatal("installer introduced an unsafe Core deployment path")
 	}
 }
+
+func TestBootableImageRequiresAuthenticatedFirstBoot(t *testing.T) {
+	service, err := os.ReadFile("../../packaging/appliance-image/aquaos-firstboot.service")
+	if err != nil {
+		t.Fatal(err)
+	}
+	builder, err := os.ReadFile("../../scripts/build-appliance-image.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"ConditionPathExists=!/var/lib/aquaos/firstboot.complete", "ExecCondition=/usr/bin/test ! -e /run/live/medium", "ListenAndServeTLS"} {
+		contents := string(service) + string(builder)
+		if required == "ListenAndServeTLS" {
+			main, readErr := os.ReadFile("../../cmd/aquaos-firstboot/main.go")
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			contents += string(main)
+		}
+		if !strings.Contains(contents, required) {
+			t.Fatalf("bootable image is missing first-boot control %q", required)
+		}
+	}
+	if !strings.Contains(string(builder), "aquaos-linux-amd64.sha256") {
+		t.Fatal("image builder does not verify the signed release digest")
+	}
+}

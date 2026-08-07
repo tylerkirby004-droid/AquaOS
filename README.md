@@ -126,10 +126,12 @@ hardware bench, display kiosk, backups, and acceptance checks—follow the
 [complete installation guide](docs/installation.md).
 
 For most new users, start with the
-[dedicated Debian appliance installer](docs/appliance-installation.md). It keeps
-Core native while installing the optional dashboard stack and handing off to a
-browser wizard. Add `--advanced-history` when long-term InfluxDB storage and
-Grafana dashboards are desired; Home Assistant history is included by default.
+[bootable USB installer](docs/usb-installation.md). Choose the target disk,
+reboot, and finish at `https://aquaos.local:8443` with the one-time code shown
+on the appliance. The signed command-line installer remains available for
+recovery. Add advanced history in the wizard only when long-term InfluxDB
+storage and Grafana dashboards are desired; Home Assistant history is included
+by default.
 
 ## Safe development startup
 
@@ -188,6 +190,7 @@ or full backup/restore system scheduled for later milestones.
 ## Repository layout
 
 - `cmd/aquaos` — process entry point and signal handling
+- `cmd/aquaos-firstboot` — temporary authenticated appliance-image onboarding
 - `cmd/devbootstrap` — broker-free development preflight and verification
 - `internal/app` — dependency composition and lifecycle ownership
 - `internal/config` — typed external configuration
@@ -204,6 +207,7 @@ or full backup/restore system scheduled for later milestones.
 - `internal/adapters/{shelly,esp32,simulator}` — adapter boundaries
 - `internal/bench` — Prompt 8 adapter-to-state/alarm/safe-response coordination
 - `deployments/systemd` — minimal native Linux appliance deployment
+- `packaging/appliance-image` — Debian live-build USB installer configuration
 - `docs/adr` — architecture decision records
 - `configs` — non-secret example configurations
 

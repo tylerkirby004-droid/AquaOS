@@ -23,6 +23,12 @@ guidance must include independent physical equipment safeguards, UPS planning,
 automatic service startup, tested off-host backups/restores, and replacement-
 machine recovery.
 
+The normal end-user installation artifact is the bootable Debian appliance ISO
+defined by ADR-024. Its temporary first-boot service must use per-machine
+credentials, TLS, explicit safety acknowledgements, signed installer payloads,
+and simulator-safe defaults. Never hide disk-erasure confirmation or commission
+equipment during operating-system installation.
+
 Never sacrifice reliability for convenience.
 
 Never introduce breaking architectural changes without documenting why.

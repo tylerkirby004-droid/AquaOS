@@ -11,6 +11,7 @@ build-all:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o bin/aquaos-sim-linux-amd64 ./cmd/aquaos-sim
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o bin/aquaosctl-linux-amd64 ./cmd/aquaosctl
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o bin/aquaos-admin-linux-amd64 ./cmd/aquaos-admin
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o bin/aquaos-firstboot-linux-amd64 ./cmd/aquaos-firstboot
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o bin/aquaos-ha-config-linux-amd64 ./cmd/aquaos-ha-config
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o bin/aquaos-linux-arm64 ./cmd/aquaos
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o bin/aquaos-healthcheck-linux-arm64 ./cmd/healthcheck

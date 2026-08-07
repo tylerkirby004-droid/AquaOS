@@ -1,5 +1,8 @@
 # Dedicated Debian appliance installation
 
+For a new computer, prefer the [bootable USB installer](usb-installation.md).
+The procedure below is the recovery and developer installation path.
+
 The easiest complete AquaOS installation uses a dedicated x86-64 computer with
 current Debian stable. It is not suitable for a shared desktop, NAS, Docker
 host, or hypervisor host. The machine remains one physical failure domain.

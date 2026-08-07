@@ -1,0 +1,19 @@
+[Unit]
+Description=AquaOS one-time browser installation
+After=network-online.target avahi-daemon.service
+Wants=network-online.target avahi-daemon.service
+ConditionPathExists=!/var/lib/aquaos/firstboot.complete
+
+[Service]
+Type=simple
+ExecCondition=/usr/bin/test ! -e /run/live/medium
+ExecStartPre=/usr/bin/openssl req -x509 -newkey rsa:3072 -sha256 -nodes -days 2 -subj /CN=aquaos.local -keyout /run/aquaos-firstboot.key -out /run/aquaos-firstboot.crt
+ExecStart=/usr/local/sbin/aquaos-firstboot --version @VERSION@ --sha256 @SHA256@
+Restart=on-failure
+RestartSec=10s
+UMask=0077
+NoNewPrivileges=false
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

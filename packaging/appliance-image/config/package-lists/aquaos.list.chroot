@@ -1,0 +1,8 @@
+avahi-daemon
+ca-certificates
+curl
+debian-installer-launcher
+docker-compose
+docker.io
+openssl
+openssh-server
