@@ -15,7 +15,7 @@ restore_optional() { systemctl start docker.service >/dev/null 2>&1 || true; }
 trap restore_optional EXIT HUP INT TERM
 {
   echo "AquaOS optional-service isolation test"
-  date -u '+started=%Y-%m-%dT%H:%M:%SZ'
+  TZ=UTC0 date '+started=%Y-%m-%dT%H:%M:%SZ'
   systemctl stop docker.service
   echo "docker=stopped"
   systemctl is-active aquaos.service
@@ -23,7 +23,7 @@ trap restore_optional EXIT HUP INT TERM
   curl --fail --silent --show-error http://localhost:8080/health/ready
   /opt/aquaos/bin/aquaosctl verify
   echo "result=PASS"
-  date -u '+finished=%Y-%m-%dT%H:%M:%SZ'
+  TZ=UTC0 date '+finished=%Y-%m-%dT%H:%M:%SZ'
 } > "$evidence" 2>&1
 restore_optional
 trap - EXIT HUP INT TERM
