@@ -60,7 +60,7 @@ func newSecuredTestServer(t *testing.T, dependencies Dependencies) *Server {
 func TestProtectedEndpointRejectsUnauthorizedRequest(t *testing.T) {
 	server := newSecuredTestServer(t, Dependencies{})
 	response := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/system", nil))
+	server.server.Handler.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/system", nil))
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d", response.Code)
 	}
@@ -74,7 +74,7 @@ func TestProtectedEndpointRateLimitsAuthenticationAttempts(t *testing.T) {
 	server.authentication = newRateLimiter(1, 1)
 	for attempt := 0; attempt < 2; attempt++ {
 		response := httptest.NewRecorder()
-		server.server.Handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/system", nil))
+		server.server.Handler.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/system", nil))
 		if attempt == 1 && response.Code != http.StatusTooManyRequests {
 			t.Fatalf("status = %d", response.Code)
 		}
@@ -85,7 +85,7 @@ func TestAlarmAcknowledgementRejectsStaleRevisionBeforeMutation(t *testing.T) {
 	alarmService := &fakeAlarms{}
 	server := newSecuredTestServer(t, Dependencies{State: fakeState{revision: 2}, Alarms: alarmService})
 	body := bytes.NewBufferString(`{"reason":"operator reviewed","expectedRevision":1}`)
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/alarms/11111111-1111-4111-8111-111111111111/ack", body)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/alarms/11111111-1111-4111-8111-111111111111/ack", body)
 	request.Header.Set("Authorization", "Bearer "+testToken)
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
@@ -103,7 +103,7 @@ func TestDiagnosticsNeverExposeConfigurationSecrets(t *testing.T) {
 	cfg.MQTT.Password = "extremely-sensitive"
 	cfg.HTTP.BearerTokenFile = "C:/secret/token"
 	server := newSecuredTestServer(t, Dependencies{Configuration: fakeConfiguration{cfg: cfg}})
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/diagnostics", nil)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/diagnostics", nil)
 	request.Header.Set("Authorization", "Bearer "+testToken)
 	response := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(response, request)
@@ -124,7 +124,7 @@ func TestDiagnosticsNeverExposeConfigurationSecrets(t *testing.T) {
 func TestMutationBodyLimitIsEnforced(t *testing.T) {
 	server := newSecuredTestServer(t, Dependencies{Configuration: fakeConfiguration{cfg: config.Defaults()}})
 	server.maximumBodyBytes = 32
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/config/validate", strings.NewReader(strings.Repeat("x", 33)))
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/config/validate", strings.NewReader(strings.Repeat("x", 33)))
 	request.Header.Set("Authorization", "Bearer "+testToken)
 	response := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(response, request)
@@ -135,7 +135,7 @@ func TestMutationBodyLimitIsEnforced(t *testing.T) {
 
 func TestCorrelationIDIsReturned(t *testing.T) {
 	server := newSecuredTestServer(t, Dependencies{})
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/system", nil)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/system", nil)
 	request.Header.Set("Authorization", "Bearer "+testToken)
 	request.Header.Set(correlationHeader, "22222222-2222-4222-8222-222222222222")
 	response := httptest.NewRecorder()
@@ -150,7 +150,7 @@ func TestBearerAuthenticatorUsesConfiguredCredential(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	request.Header.Set("Authorization", "Bearer wrong")
 	if _, err = authenticator.Authenticate(request); err == nil {
 		t.Fatal("wrong token authenticated")

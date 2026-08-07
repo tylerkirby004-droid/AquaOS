@@ -16,7 +16,7 @@ import (
 func TestLivenessHandler(t *testing.T) {
 	server := &Server{health: health.NewManager(), logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	response := httptest.NewRecorder()
-	server.live(response, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	server.live(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/healthz", nil))
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d", response.Code)
 	}
@@ -27,7 +27,7 @@ func TestCanonicalHealthRoutesAreRegistered(t *testing.T) {
 	server := New(cfg, health.NewManager(), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	for _, path := range []string{"/health/live", "/health/ready"} {
 		response := httptest.NewRecorder()
-		server.server.Handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		server.server.Handler.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, path, nil))
 		if response.Code == http.StatusNotFound {
 			t.Fatalf("route %s was not registered", path)
 		}
@@ -41,7 +41,7 @@ func TestReadinessReflectsAggregateHealth(t *testing.T) {
 	}
 	server := &Server{health: manager, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	response := httptest.NewRecorder()
-	server.ready(response, httptest.NewRequest(http.MethodGet, "/health/ready", nil))
+	server.ready(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health/ready", nil))
 	if response.Code != http.StatusOK {
 		t.Fatalf("healthy status = %d", response.Code)
 	}
@@ -49,7 +49,7 @@ func TestReadinessReflectsAggregateHealth(t *testing.T) {
 		t.Fatal(err)
 	}
 	response = httptest.NewRecorder()
-	server.ready(response, httptest.NewRequest(http.MethodGet, "/health/ready", nil))
+	server.ready(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health/ready", nil))
 	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("unhealthy status = %d", response.Code)
 	}

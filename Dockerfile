@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Optional development/integration image. This is not the production AquaOS
 # Core deployment and must not become part of the critical control path.
-FROM golang:1.24-bookworm AS build
+FROM golang:1.25.12-bookworm AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

@@ -30,12 +30,12 @@ jobs:
       - name: Staticcheck
         uses: dominikh/staticcheck-action@v1.3.1
         with:
-          version: "2025.1.1"
+          version: "2026.1"
           install-go: false
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.1.6
+          version: v2.11.4
       - name: Vulnerability scan
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
       - name: Secret scan
@@ -43,7 +43,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Dependency licenses
-        run: go run github.com/google/go-licenses@v1.6.0 check ./... --allowed_licenses=Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MIT,MPL-2.0
+        run: go run github.com/google/go-licenses@v1.6.0 check ./... --allowed_licenses=Apache-2.0,BSD-2-Clause,BSD-3-Clause,EPL-2.0,ISC,MIT,MPL-2.0
       - name: Unit and race tests
         run: go test -race -coverprofile=coverage.out ./...
       - name: Optional vision contract tests

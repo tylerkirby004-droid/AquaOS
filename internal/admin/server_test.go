@@ -67,7 +67,7 @@ func newTestServer(t *testing.T, service Operations) *Server {
 func TestAdminAPIRequiresAuthentication(t *testing.T) {
 	server := newTestServer(t, &fakeOperations{})
 	response := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/status", nil))
+	server.server.Handler.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/status", nil))
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d", response.Code)
 	}
@@ -75,7 +75,7 @@ func TestAdminAPIRequiresAuthentication(t *testing.T) {
 func TestAdminMutationCallsAuthorizedApplicationService(t *testing.T) {
 	service := &fakeOperations{}
 	server := newTestServer(t, service)
-	request := httptest.NewRequest(http.MethodPost, "/api/repair", strings.NewReader(`{"dryRun":true}`))
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/repair", strings.NewReader(`{"dryRun":true}`))
 	request.Header.Set("Authorization", "Bearer test-token-with-at-least-32-characters")
 	response := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(response, request)
@@ -86,14 +86,14 @@ func TestAdminMutationCallsAuthorizedApplicationService(t *testing.T) {
 func TestEmbeddedAdminUIIsAvailableWithoutNodeBuild(t *testing.T) {
 	server := newTestServer(t, &fakeOperations{})
 	response := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/admin/", nil))
+	server.server.Handler.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/", nil))
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "Recovery-safe administration") {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 }
 func TestRestorePayloadIsBounded(t *testing.T) {
 	server := newTestServer(t, &fakeOperations{})
-	request := httptest.NewRequest(http.MethodPost, "/api/restore", strings.NewReader(strings.Repeat("x", 1025)))
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/restore", strings.NewReader(strings.Repeat("x", 1025)))
 	request.Header.Set("Authorization", "Bearer test-token-with-at-least-32-characters")
 	response := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(response, request)
@@ -104,7 +104,7 @@ func TestRestorePayloadIsBounded(t *testing.T) {
 
 func TestAdminSecurityHeadersAndOriginPolicy(t *testing.T) {
 	server := newTestServer(t, &fakeOperations{})
-	request := httptest.NewRequest(http.MethodPost, "/api/repair", strings.NewReader(`{"dryRun":true}`))
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/repair", strings.NewReader(`{"dryRun":true}`))
 	request.Host = "127.0.0.1:8090"
 	request.Header.Set("Authorization", "Bearer test-token-with-at-least-32-characters")
 	request.Header.Set("Origin", "https://attacker.example")
@@ -123,7 +123,7 @@ func TestAdminAuthenticationLimiterIsBoundedAndEnforced(t *testing.T) {
 	server.authentication = newRequestLimiter(1, 1, 2)
 	for attempt := 0; attempt < 2; attempt++ {
 		response := httptest.NewRecorder()
-		server.server.Handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/status", nil))
+		server.server.Handler.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/status", nil))
 		if attempt == 1 && response.Code != http.StatusTooManyRequests {
 			t.Fatalf("status = %d", response.Code)
 		}
@@ -137,7 +137,7 @@ func TestAdminAuthenticationLimiterIsBoundedAndEnforced(t *testing.T) {
 
 func TestAdminOperationErrorIsNotExposed(t *testing.T) {
 	server := newTestServer(t, &fakeOperations{statusErr: errors.New("secret=/etc/aquaos/token")})
-	request := httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/status", nil)
 	request.Header.Set("Authorization", "Bearer test-token-with-at-least-32-characters")
 	response := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(response, request)
