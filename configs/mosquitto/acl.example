@@ -1,0 +1,27 @@
+# AquaOS Mosquitto ACL example for site home-reef.
+# Copy to a protected broker path, replace client names/site IDs, and use with
+# `allow_anonymous false`. Mosquitto denies permissions not granted below.
+
+user aquaos-core
+topic read  aquaos/home-reef/v1/commands/+/request
+topic read  aquaos/home-reef/v1/ai/+/observations/+
+topic write aquaos/home-reef/v1/system/core/status
+topic write aquaos/home-reef/v1/system/core/availability
+topic write aquaos/home-reef/v1/sensors/+/state
+topic write aquaos/home-reef/v1/equipment/+/reported
+topic write aquaos/home-reef/v1/equipment/+/desired
+topic write aquaos/home-reef/v1/commands/+/result
+topic write aquaos/home-reef/v1/alarms/+/state
+topic write aquaos/home-reef/v1/events/+
+
+user home-assistant
+topic read  aquaos/home-reef/v1/#
+topic write aquaos/home-reef/v1/commands/+/request
+
+user aquaos-vision
+topic read  aquaos/home-reef/v1/sensors/+/state
+topic read  aquaos/home-reef/v1/events/+
+topic write aquaos/home-reef/v1/ai/vision/observations/+
+
+# No AI or Home Assistant principal receives desired-state or adapter access.
+# The AI principal receives no command request/result write permission.

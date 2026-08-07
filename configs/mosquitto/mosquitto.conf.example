@@ -1,0 +1,9 @@
+allow_anonymous false
+persistence true
+persistence_location /var/lib/mosquitto/
+acl_file /etc/mosquitto/aquaos.acl
+password_file /etc/mosquitto/aquaos.passwords
+
+# Development may bind loopback without TLS. Any non-loopback deployment must
+# configure listener, cafile, certfile, and keyfile for authenticated TLS.
+listener 1883 localhost

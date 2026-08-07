@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aquaos.dev/schemas/mqtt/envelope/v1",
+  "title": "AquaOS MQTT envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "messageId", "correlationId", "source", "siteId", "occurredAt", "data"],
+  "properties": {
+    "schemaVersion": { "type": "string", "pattern": "^1\\.[0-9]+$" },
+    "messageId": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "correlationId": { "type": "string", "format": "uuid" },
+    "source": { "type": "string", "minLength": 1 },
+    "siteId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$" },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "expiresAt": { "type": "string", "format": "date-time" },
+    "revision": { "type": "integer", "minimum": 0 },
+    "data": {}
+  }
+}
