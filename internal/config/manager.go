@@ -223,6 +223,8 @@ func changesBetween(current, next Config) []Change {
 	add("http", false, "HTTP listeners and timeouts require restart", current.HTTP, next.HTTP)
 	add("mqtt", false, "MQTT connection changes require restart", current.MQTT.Redacted(), next.MQTT.Redacted())
 	add("simulator", false, "adapter activation requires restart", current.Simulator, next.Simulator)
+	add("adapters", false, "direct adapter identity, safety, and connection changes require restart", current.Adapters, next.Adapters)
+	add("bench", false, "bench activation guard changes require restart", current.Bench, next.Bench)
 	add("inventory", false, "inventory changes require validated registry activation", current.Inventory, next.Inventory)
 	return changes
 }

@@ -34,6 +34,18 @@ mqtt:
 simulator:
   enabled: true
 
+adapters:
+  shelly:
+    enabled: false
+    endpoints: []
+  esp32:
+    enabled: false
+    endpoints: []
+
+bench:
+  enabled: false
+  safe_load_acknowledged: false
+
 inventory:
   devices: []
   sensors: []

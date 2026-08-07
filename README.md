@@ -91,6 +91,13 @@ heater, pumps, ATO, leaks, sensor faults, acknowledgements, and optional-service
 loss. Run the normal trace with `make simulate`; see
 [docs/simulator.md](docs/simulator.md) before authoring or changing fixtures.
 
+Prompt 8 introduces explicitly activated direct-LAN boundaries for Shelly Plug
+US Gen4 and versioned Ethernet/PoE ESP32 dual-probe nodes. The safe default still
+uses the simulator and rejecting output router. See
+[docs/prompt-8-bench-checklist.md](docs/prompt-8-bench-checklist.md) and
+[docs/esp32-node-protocol.md](docs/esp32-node-protocol.md). Physical bench
+evidence is required before Prompt 8 can be declared complete.
+
 ## Safe development startup
 
 Requirements:
@@ -162,6 +169,7 @@ or full backup/restore system scheduled for later milestones.
 - `internal/output` — sole validated command, acknowledgement, and reconciliation path
 - `internal/safety` — operating modes, interlocks, overrides, and watchdog policy
 - `internal/adapters/{shelly,esp32,simulator}` — adapter boundaries
+- `internal/bench` — Prompt 8 adapter-to-state/alarm/safe-response coordination
 - `deployments/systemd` — minimal native Linux Control VM deployment
 - `docs/adr` — architecture decision records
 - `configs` — non-secret example configurations

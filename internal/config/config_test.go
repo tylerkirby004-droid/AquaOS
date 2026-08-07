@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tylerkirby004-droid/aquaos/internal/events"
 )
@@ -208,6 +209,51 @@ func TestLoadRejectsInvalidEnvironmentValue(t *testing.T) {
 	t.Setenv("AQUAOS_MQTT_ENABLED", "occasionally")
 	if _, err := Load(writeConfig(t, validYAML)); validationCode(err) != "invalid_boolean" {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestRealAdaptersRequireExplicitBenchActivationAndTypedBounds(t *testing.T) {
+	cfg := Defaults()
+	cfg.Simulator.Enabled = false
+	cfg.Adapters.Shelly.Enabled = true
+	cfg.Adapters.Shelly.Endpoints = []ShellyEndpoint{{
+		ID: "11111111-1111-4111-8111-111111111111", EquipmentID: "22222222-2222-4222-8222-222222222222", AlarmRuleID: "33333333-3333-4333-8333-333333333333",
+		BaseURL: "http://shelly.local", Channel: 0, PollInterval: time.Second, RequestTimeout: 100 * time.Millisecond, Retries: 1, PowerReturnPolicy: "off", EquipmentKind: "outlet",
+	}}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("real adapter started without explicit bench acknowledgement")
+	}
+	cfg.Bench = Bench{Enabled: true, SafeLoadAcknowledged: true}
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	cfg.Simulator.Enabled = true
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("simulator and real adapter conflict was accepted")
+	}
+}
+
+func TestAdapterChangesCannotHotReload(t *testing.T) {
+	current := Defaults()
+	manager := NewManager(current, nil, nil, discardLogger())
+	next := current.Clone()
+	next.Bench.Enabled = true
+	plan, err := manager.Plan(next)
+	if err == nil {
+		t.Fatal("bench activation unexpectedly hot reloaded")
+	}
+	if len(plan.Changes) != 1 || plan.Changes[0].Path != "bench" || plan.Changes[0].Reloadable {
+		t.Fatalf("unexpected plan: %+v", plan)
+	}
+}
+
+func TestCheckedInBenchExampleIsSafeAndValid(t *testing.T) {
+	cfg, err := Load(filepath.Join("..", "..", "configs", "bench.example.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Adapters.Shelly.Enabled || cfg.Adapters.ESP32.Enabled || cfg.Bench.SafeLoadAcknowledged || cfg.Simulator.Enabled {
+		t.Fatalf("bench example activates hardware or simulator unexpectedly: %+v", cfg)
 	}
 }
 

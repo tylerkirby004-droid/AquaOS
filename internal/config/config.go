@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tylerkirby004-droid/aquaos/internal/domain"
 	"gopkg.in/yaml.v3"
 )
 
@@ -36,6 +37,8 @@ type Config struct {
 	HTTP          HTTP        `yaml:"http" json:"http"`
 	MQTT          MQTT        `yaml:"mqtt" json:"mqtt"`
 	Simulator     Simulator   `yaml:"simulator" json:"simulator"`
+	Adapters      Adapters    `yaml:"adapters" json:"adapters"`
+	Bench         Bench       `yaml:"bench" json:"bench"`
 	Inventory     Inventory   `yaml:"inventory" json:"inventory"`
 }
 
@@ -79,6 +82,63 @@ type MQTT struct {
 // Simulator configures the hardware-incapable simulator adapter.
 type Simulator struct {
 	Enabled bool `yaml:"enabled" json:"enabled"`
+}
+
+// Adapters contains direct local-LAN hardware boundaries. All adapters are
+// disabled by default and cannot coexist with the hardware-incapable simulator.
+type Adapters struct {
+	Shelly ShellyAdapter `yaml:"shelly" json:"shelly"`
+	ESP32  ESP32Adapter  `yaml:"esp32" json:"esp32"`
+}
+
+// ShellyAdapter configures Shelly Gen4 endpoints.
+type ShellyAdapter struct {
+	Enabled   bool             `yaml:"enabled" json:"enabled"`
+	Endpoints []ShellyEndpoint `yaml:"endpoints" json:"endpoints"`
+}
+
+// ShellyEndpoint maps a typed equipment identity to one local switch channel.
+type ShellyEndpoint struct {
+	ID                string        `yaml:"id" json:"id"`
+	EquipmentID       string        `yaml:"equipment_id" json:"equipmentId"`
+	AlarmRuleID       string        `yaml:"alarm_rule_id" json:"alarmRuleId"`
+	BaseURL           string        `yaml:"base_url" json:"baseUrl"`
+	Channel           int           `yaml:"channel" json:"channel"`
+	PollInterval      time.Duration `yaml:"poll_interval" json:"pollInterval"`
+	RequestTimeout    time.Duration `yaml:"request_timeout" json:"requestTimeout"`
+	Retries           int           `yaml:"retries" json:"retries"`
+	SafeOn            bool          `yaml:"safe_on" json:"safeOn"`
+	PowerReturnPolicy string        `yaml:"power_return_policy" json:"powerReturnPolicy"`
+	EquipmentKind     string        `yaml:"equipment_kind" json:"equipmentKind"`
+	MaximumOn         time.Duration `yaml:"maximum_on" json:"maximumOn"`
+	RequiredProbeIDs  []string      `yaml:"required_probe_ids" json:"requiredProbeIds"`
+}
+
+// ESP32Adapter configures Ethernet/PoE sensor nodes.
+type ESP32Adapter struct {
+	Enabled   bool            `yaml:"enabled" json:"enabled"`
+	Endpoints []ESP32Endpoint `yaml:"endpoints" json:"endpoints"`
+}
+
+// ESP32Endpoint maps one node and two probe identities to the v1 wire contract.
+type ESP32Endpoint struct {
+	ID                string        `yaml:"id" json:"id"`
+	DeviceID          string        `yaml:"device_id" json:"deviceId"`
+	AlarmRuleID       string        `yaml:"alarm_rule_id" json:"alarmRuleId"`
+	BaseURL           string        `yaml:"base_url" json:"baseUrl"`
+	BearerTokenFile   string        `yaml:"bearer_token_file" json:"bearerTokenFile,omitempty"`
+	ProbeIDs          []string      `yaml:"probe_ids" json:"probeIds"`
+	PollInterval      time.Duration `yaml:"poll_interval" json:"pollInterval"`
+	RequestTimeout    time.Duration `yaml:"request_timeout" json:"requestTimeout"`
+	FreshFor          time.Duration `yaml:"fresh_for" json:"freshFor"`
+	MaximumClockSkew  time.Duration `yaml:"maximum_clock_skew" json:"maximumClockSkew"`
+	MaximumDifference float64       `yaml:"maximum_difference_celsius" json:"maximumDifferenceCelsius"`
+}
+
+// Bench is an explicit activation guard for real Prompt 8 hardware.
+type Bench struct {
+	Enabled              bool `yaml:"enabled" json:"enabled"`
+	SafeLoadAcknowledged bool `yaml:"safe_load_acknowledged" json:"safeLoadAcknowledged"`
 }
 
 // Inventory contains declarative identities needed for cross-reference and
@@ -263,7 +323,149 @@ func (c Config) Validate() error {
 			return validationError("mqtt.reconnect_jitter", "out_of_range", "must be between 0 and 0.5")
 		}
 	}
+	if err := c.validateAdapters(); err != nil {
+		return err
+	}
 	return c.Inventory.validate()
+}
+
+func (c Config) validateAdapters() error {
+	realEnabled := c.Adapters.Shelly.Enabled || c.Adapters.ESP32.Enabled
+	if realEnabled && c.Simulator.Enabled {
+		return validationError("simulator.enabled", "adapter_conflict", "must be false when a real adapter is enabled")
+	}
+	if realEnabled && (!c.Bench.Enabled || !c.Bench.SafeLoadAcknowledged) {
+		return validationError("bench.safe_load_acknowledged", "activation_guard", "must be true with bench.enabled before real adapters can start")
+	}
+	if c.Adapters.Shelly.Enabled && len(c.Adapters.Shelly.Endpoints) == 0 {
+		return validationError("adapters.shelly.endpoints", "required", "must contain at least one endpoint when enabled")
+	}
+	seenEndpoints := make(map[string]struct{})
+	seenEquipment := make(map[string]struct{})
+	for index, endpoint := range c.Adapters.Shelly.Endpoints {
+		base := fmt.Sprintf("adapters.shelly.endpoints[%d]", index)
+		for path, value := range map[string]string{"id": endpoint.ID, "equipment_id": endpoint.EquipmentID, "alarm_rule_id": endpoint.AlarmRuleID} {
+			if err := validateUUID(base+"."+path, value); err != nil {
+				return err
+			}
+		}
+		if _, exists := seenEndpoints[endpoint.ID]; exists {
+			return validationError(base+".id", "duplicate_id", "duplicates endpoint "+endpoint.ID)
+		}
+		seenEndpoints[endpoint.ID] = struct{}{}
+		if _, exists := seenEquipment[endpoint.EquipmentID]; exists {
+			return validationError(base+".equipment_id", "duplicate_id", "equipment has more than one owning adapter")
+		}
+		seenEquipment[endpoint.EquipmentID] = struct{}{}
+		parsed, err := url.Parse(endpoint.BaseURL)
+		if err != nil || parsed.Scheme != "http" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return validationError(base+".base_url", "invalid_uri", "must be an unauthenticated http URL with a host")
+		}
+		if endpoint.Channel < 0 || endpoint.Channel > 31 {
+			return validationError(base+".channel", "out_of_range", "must be between 0 and 31")
+		}
+		if endpoint.PollInterval <= 0 || endpoint.RequestTimeout <= 0 || endpoint.RequestTimeout > endpoint.PollInterval {
+			return validationError(base+".request_timeout", "out_of_range", "must be positive and no greater than poll_interval")
+		}
+		if endpoint.Retries < 0 || endpoint.Retries > 5 {
+			return validationError(base+".retries", "out_of_range", "must be between 0 and 5")
+		}
+		if endpoint.PowerReturnPolicy != "off" && endpoint.PowerReturnPolicy != "restore" {
+			return validationError(base+".power_return_policy", "invalid_enum", "must be off or restore")
+		}
+		if endpoint.EquipmentKind != "outlet" && endpoint.EquipmentKind != "heater" {
+			return validationError(base+".equipment_kind", "invalid_enum", "must be outlet or heater")
+		}
+		if endpoint.EquipmentKind == "heater" {
+			if endpoint.SafeOn {
+				return validationError(base+".safe_on", "unsafe_value", "must be false for heater equipment")
+			}
+			if endpoint.MaximumOn <= 0 {
+				return validationError(base+".maximum_on", "out_of_range", "must be positive for heater equipment")
+			}
+			if len(endpoint.RequiredProbeIDs) != 2 {
+				return validationError(base+".required_probe_ids", "invalid_count", "must contain both independent probe IDs for heater equipment")
+			}
+			for probeIndex, probeID := range endpoint.RequiredProbeIDs {
+				if err := validateUUID(fmt.Sprintf("%s.required_probe_ids[%d]", base, probeIndex), probeID); err != nil {
+					return err
+				}
+			}
+			if endpoint.RequiredProbeIDs[0] == endpoint.RequiredProbeIDs[1] {
+				return validationError(base+".required_probe_ids", "duplicate_id", "heater probes must be independent")
+			}
+		} else if endpoint.MaximumOn < 0 || len(endpoint.RequiredProbeIDs) != 0 {
+			return validationError(base+".maximum_on", "invalid_combination", "outlet equipment cannot declare heater probe requirements and maximum_on cannot be negative")
+		}
+	}
+	if c.Adapters.ESP32.Enabled && len(c.Adapters.ESP32.Endpoints) == 0 {
+		return validationError("adapters.esp32.endpoints", "required", "must contain at least one endpoint when enabled")
+	}
+	seenDevices := make(map[string]struct{})
+	seenProbes := make(map[string]struct{})
+	for index, endpoint := range c.Adapters.ESP32.Endpoints {
+		base := fmt.Sprintf("adapters.esp32.endpoints[%d]", index)
+		for path, value := range map[string]string{"id": endpoint.ID, "device_id": endpoint.DeviceID, "alarm_rule_id": endpoint.AlarmRuleID} {
+			if err := validateUUID(base+"."+path, value); err != nil {
+				return err
+			}
+		}
+		if _, exists := seenEndpoints[endpoint.ID]; exists {
+			return validationError(base+".id", "duplicate_id", "duplicates endpoint "+endpoint.ID)
+		}
+		seenEndpoints[endpoint.ID] = struct{}{}
+		if _, exists := seenDevices[endpoint.DeviceID]; exists {
+			return validationError(base+".device_id", "duplicate_id", "device has more than one node endpoint")
+		}
+		seenDevices[endpoint.DeviceID] = struct{}{}
+		parsed, err := url.Parse(endpoint.BaseURL)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return validationError(base+".base_url", "invalid_uri", "must be an http or https URL with a host and no credentials")
+		}
+		if len(endpoint.ProbeIDs) != 2 {
+			return validationError(base+".probe_ids", "invalid_count", "must contain exactly two probe IDs")
+		}
+		for probeIndex, probeID := range endpoint.ProbeIDs {
+			if err := validateUUID(fmt.Sprintf("%s.probe_ids[%d]", base, probeIndex), probeID); err != nil {
+				return err
+			}
+			if _, exists := seenProbes[probeID]; exists {
+				return validationError(base+".probe_ids", "duplicate_id", "probe identity is reused")
+			}
+			seenProbes[probeID] = struct{}{}
+		}
+		if endpoint.PollInterval <= 0 || endpoint.RequestTimeout <= 0 || endpoint.RequestTimeout > endpoint.PollInterval || endpoint.FreshFor < endpoint.PollInterval {
+			return validationError(base+".fresh_for", "out_of_range", "poll, timeout, and freshness bounds are invalid")
+		}
+		if endpoint.MaximumClockSkew < 0 || endpoint.MaximumClockSkew > time.Minute {
+			return validationError(base+".maximum_clock_skew", "out_of_range", "must be between zero and 1m")
+		}
+		if endpoint.MaximumDifference <= 0 || endpoint.MaximumDifference > 10 {
+			return validationError(base+".maximum_difference_celsius", "out_of_range", "must be greater than zero and at most 10")
+		}
+	}
+	for index, endpoint := range c.Adapters.Shelly.Endpoints {
+		if endpoint.EquipmentKind != "heater" || !c.Adapters.Shelly.Enabled {
+			continue
+		}
+		path := fmt.Sprintf("adapters.shelly.endpoints[%d].required_probe_ids", index)
+		if !c.Adapters.ESP32.Enabled {
+			return validationError(path, "adapter_dependency", "heater bench equipment requires the direct ESP32 adapter")
+		}
+		for _, probeID := range endpoint.RequiredProbeIDs {
+			if _, exists := seenProbes[probeID]; !exists {
+				return validationError(path, "invalid_reference", "references an unknown ESP32 probe "+probeID)
+			}
+		}
+	}
+	return nil
+}
+
+func validateUUID(path, value string) error {
+	if err := domain.EntityID(value).Validate(); err != nil {
+		return validationError(path, "invalid_uuid", err.Error())
+	}
+	return nil
 }
 
 func (i Inventory) validate() error {
@@ -374,5 +576,13 @@ func (c Config) Clone() Config {
 		}
 	}
 	cloned.Inventory.Equipment = append([]Equipment(nil), c.Inventory.Equipment...)
+	cloned.Adapters.Shelly.Endpoints = append([]ShellyEndpoint(nil), c.Adapters.Shelly.Endpoints...)
+	for index := range cloned.Adapters.Shelly.Endpoints {
+		cloned.Adapters.Shelly.Endpoints[index].RequiredProbeIDs = append([]string(nil), c.Adapters.Shelly.Endpoints[index].RequiredProbeIDs...)
+	}
+	cloned.Adapters.ESP32.Endpoints = append([]ESP32Endpoint(nil), c.Adapters.ESP32.Endpoints...)
+	for index := range cloned.Adapters.ESP32.Endpoints {
+		cloned.Adapters.ESP32.Endpoints[index].ProbeIDs = append([]string(nil), c.Adapters.ESP32.Endpoints[index].ProbeIDs...)
+	}
 	return cloned
 }

@@ -34,6 +34,20 @@ simulator:
   # Foundation-only lifecycle adapter; it cannot reach or command real hardware.
   enabled: true
 
+# Real LAN adapters remain disabled until the Prompt 8 bench configuration is
+# reviewed on the dedicated Control VM. Addresses and IDs are always external.
+adapters:
+  shelly:
+    enabled: false
+    endpoints: []
+  esp32:
+    enabled: false
+    endpoints: []
+
+bench:
+  enabled: false
+  safe_load_acknowledged: false
+
 inventory:
   devices: []
   sensors: []

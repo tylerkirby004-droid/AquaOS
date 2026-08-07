@@ -43,6 +43,7 @@ const (
 	ReasonAcknowledged     = "command.acknowledged"
 	ReasonReconciled       = "command.reconciled"
 	ReasonReportedMismatch = "command.reported_mismatch"
+	ReasonReconcileExpired = "command.reconciliation_expired"
 )
 
 // Command contains all causal, authorization, expiry, and concurrency metadata.
@@ -269,6 +270,31 @@ func (s *Service) Reconcile(ctx context.Context, id domain.CommandID, reportedOn
 		return s.transition(ctx, id, StatusFailed, ReasonReportedMismatch, events.CommandReconciled, nil)
 	}
 	return s.transition(ctx, id, StatusSucceeded, ReasonReconciled, events.CommandReconciled, &observedAt)
+}
+
+// ExpireAcknowledged marks an acknowledged command failed when its adapter can
+// no longer prove reported-state convergence before expiry. The reason must be
+// a stable adapter code; callers cannot turn an unverified command into success.
+func (s *Service) ExpireAcknowledged(ctx context.Context, id domain.CommandID, reason string, observedAt time.Time) (Result, error) {
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
+	if reason == "" || observedAt.IsZero() {
+		return Result{}, errors.New("reconciliation expiry reason and timestamp are required")
+	}
+	s.mu.RLock()
+	result, ok := s.results[id]
+	s.mu.RUnlock()
+	if !ok {
+		return Result{}, ErrNotFound
+	}
+	if result.Status != StatusAcknowledged {
+		return Result{}, ErrInvalidTransition
+	}
+	if observedAt.Before(result.Command.ExpiresAt) {
+		return Result{}, errors.New("cannot expire command before its deadline")
+	}
+	return s.transition(ctx, id, StatusExpired, reason, events.CommandExpired, nil)
 }
 
 // Get returns a defensive copy of one command result.

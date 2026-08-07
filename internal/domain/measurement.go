@@ -17,6 +17,9 @@ const (
 	QuantitySalinity    QuantityKind = "salinity"
 	QuantityFlow        QuantityKind = "flow"
 	QuantityLevel       QuantityKind = "level"
+	QuantityPower       QuantityKind = "power"
+	QuantityVoltage     QuantityKind = "voltage"
+	QuantityCurrent     QuantityKind = "current"
 )
 
 // Unit is a canonical unit identifier; values are normalized at boundaries.
@@ -29,6 +32,9 @@ const (
 	UnitPPT           Unit = "ppt"
 	UnitLitersPerHour Unit = "liters_per_hour"
 	UnitPercent       Unit = "percent"
+	UnitWatts         Unit = "watts"
+	UnitVolts         Unit = "volts"
+	UnitAmperes       Unit = "amperes"
 )
 
 // Quality describes confidence in a measurement without changing its value.
@@ -64,7 +70,16 @@ func (q Quantity) Validate() error {
 	if math.IsNaN(q.Value) || math.IsInf(q.Value, 0) {
 		return errors.New("quantity value must be finite")
 	}
-	want := map[QuantityKind]Unit{QuantityTemperature: UnitCelsius, QuantityPH: UnitPH, QuantitySalinity: UnitPPT, QuantityFlow: UnitLitersPerHour, QuantityLevel: UnitPercent}
+	want := map[QuantityKind]Unit{
+		QuantityTemperature: UnitCelsius,
+		QuantityPH:          UnitPH,
+		QuantitySalinity:    UnitPPT,
+		QuantityFlow:        UnitLitersPerHour,
+		QuantityLevel:       UnitPercent,
+		QuantityPower:       UnitWatts,
+		QuantityVoltage:     UnitVolts,
+		QuantityCurrent:     UnitAmperes,
+	}
 	unit, ok := want[q.Kind]
 	if !ok {
 		return fmt.Errorf("unsupported quantity kind %q", q.Kind)

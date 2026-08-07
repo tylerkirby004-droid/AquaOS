@@ -124,3 +124,24 @@ func TestIdempotentSubmissionDoesNotRedispatch(t *testing.T) {
 		t.Fatalf("first=%+v second=%+v calls=%d", first, second, executor.calls)
 	}
 }
+
+func TestExpireAcknowledgedRequiresDeadlineAndNeverSucceeds(t *testing.T) {
+	clock := &fixedClock{at: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	policy := &fakePolicy{decision: safety.Decision{Allowed: true}}
+	executor := &fakeExecutor{acknowledgement: Acknowledgement{Accepted: true, AcknowledgedAt: clock.at}}
+	service := newService(t, clock, policy, executor)
+	result, err := service.Submit(context.Background(), command(clock.at))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ExpireAcknowledged(context.Background(), result.Command.ID, "shelly.reconciliation_expired", result.Command.ExpiresAt.Add(-time.Nanosecond)); err == nil {
+		t.Fatal("expected early expiry rejection")
+	}
+	result, err = service.ExpireAcknowledged(context.Background(), result.Command.ID, "shelly.reconciliation_expired", result.Command.ExpiresAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != StatusExpired || result.Reason != "shelly.reconciliation_expired" {
+		t.Fatalf("unexpected expiry: %+v", result)
+	}
+}

@@ -1,0 +1,82 @@
+schema_version: 1
+
+application:
+  log_level: info
+  startup_timeout: 30s
+  shutdown_timeout: 15s
+  component_timeout: 5s
+  event_concurrency: 64
+
+http:
+  address: "localhost:8080"
+  read_timeout: 5s
+  write_timeout: 10s
+  idle_timeout: 60s
+
+mqtt:
+  enabled: false
+  site_id: bench
+  broker: ""
+  client_id: ""
+  connect_timeout: 10s
+  keep_alive: 30s
+  disconnect_quiesce: 250ms
+  required_for_ready: false
+  maximum_payload: 262144
+  queue_capacity: 256
+  idempotency_capacity: 4096
+  reconnect_minimum: 1s
+  reconnect_maximum: 1m
+  reconnect_jitter: 0.2
+
+simulator:
+  enabled: false
+
+# Keep both adapters disabled until hostnames, UUIDs, power-return behavior,
+# token-file permissions, lamp load, and rollback have been verified.
+adapters:
+  shelly:
+    enabled: false
+    endpoints:
+      - id: "11111111-1111-4111-8111-111111111111"
+        equipment_id: "22222222-2222-4222-8222-222222222222"
+        alarm_rule_id: "33333333-3333-4333-8333-333333333333"
+        base_url: "http://shelly-bench.local"
+        channel: 0
+        poll_interval: 2s
+        request_timeout: 500ms
+        retries: 1
+        safe_on: false
+        power_return_policy: off
+        equipment_kind: heater
+        maximum_on: 10m
+        required_probe_ids:
+          - "77777777-7777-4777-8777-777777777777"
+          - "88888888-8888-4888-8888-888888888888"
+  esp32:
+    enabled: false
+    endpoints:
+      - id: "44444444-4444-4444-8444-444444444444"
+        device_id: "55555555-5555-4555-8555-555555555555"
+        alarm_rule_id: "66666666-6666-4666-8666-666666666666"
+        base_url: "http://esp32-bench.local"
+        bearer_token_file: "/etc/aquaos/secrets/esp32-node.token"
+        probe_ids:
+          - "77777777-7777-4777-8777-777777777777"
+          - "88888888-8888-4888-8888-888888888888"
+        poll_interval: 2s
+        request_timeout: 500ms
+        fresh_for: 10s
+        maximum_clock_skew: 2s
+        maximum_difference_celsius: 0.5
+
+# Set both values true only while following docs/prompt-8-bench-checklist.md
+# with a lamp/safe resistive load and no production equipment connection.
+bench:
+  enabled: false
+  safe_load_acknowledged: false
+
+inventory:
+  devices: []
+  sensors: []
+  equipment: []

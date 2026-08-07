@@ -29,6 +29,34 @@ diagnostics replace it with `[REDACTED]`. The active SHA-256 digest is computed
 from redacted canonical JSON, so it identifies operational configuration
 without becoming a verifier for secret guesses.
 
+## Prompt 8 direct adapters
+
+`adapters.shelly` and `adapters.esp32` are disabled by default. Enabling either
+requires `simulator.enabled: false`, `bench.enabled: true`, and an explicit
+`bench.safe_load_acknowledged: true`. This activation interlock does not replace
+the electrical and operational checklist in
+[prompt-8-bench-checklist.md](prompt-8-bench-checklist.md).
+
+Shelly endpoints use external UUIDs, an HTTP base URL, channel, bounded polling,
+timeout/retry settings, configured safe state, expected firmware power-return
+policy, and a stable alarm-rule UUID. Core verifies `initial_state` through
+`Switch.GetConfig`; it does not silently rewrite device configuration.
+Prompt 8 supports an explicitly declared generic outlet or a lamp-backed heater
+bench profile. A heater requires `safe_on: false`, a positive `maximum_on`, both
+configured ESP32 probe IDs, and the direct ESP32 adapter. Probe loss, staleness,
+invalidity, or disagreement blocks activation through the existing safety
+engine.
+
+ESP32 endpoints use external node/endpoint/probe/rule UUIDs and the versioned
+[ESP32 node protocol](esp32-node-protocol.md). Tokens are read from a bounded
+`bearer_token_file`; inline tokens and URL credentials are rejected. Token
+contents are never included in the redacted configuration snapshot or digest.
+
+Use [configs/bench.example.yaml](../configs/bench.example.yaml) only as a
+reviewed template. Its real adapters and activation acknowledgement are false.
+No adapter address, identity, timeout, safe state, or credential is hardcoded in
+the binary.
+
 MQTT payload, offline queue, idempotency window, and reconnect backoff limits
 are explicit YAML fields. They have conservative bounded defaults and are
 validated whenever MQTT is enabled. Topic names and delivery policies are not

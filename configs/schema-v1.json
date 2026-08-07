@@ -54,6 +54,36 @@
       "additionalProperties": false,
       "properties": { "enabled": { "type": "boolean" } }
     },
+    "adapters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "shelly": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "endpoints": { "type": "array", "items": { "$ref": "#/$defs/shellyEndpoint" } }
+          }
+        },
+        "esp32": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "endpoints": { "type": "array", "items": { "$ref": "#/$defs/esp32Endpoint" } }
+          }
+        }
+      }
+    },
+    "bench": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "safe_load_acknowledged": { "type": "boolean" }
+      }
+    },
     "inventory": {
       "type": "object",
       "additionalProperties": false,
@@ -66,6 +96,32 @@
   },
   "$defs": {
     "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$" },
+    "uuid": { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" },
+    "shellyEndpoint": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "equipment_id", "alarm_rule_id", "base_url", "channel", "poll_interval", "request_timeout", "retries", "safe_on", "power_return_policy", "equipment_kind"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" }, "equipment_id": { "$ref": "#/$defs/uuid" }, "alarm_rule_id": { "$ref": "#/$defs/uuid" },
+        "base_url": { "type": "string" }, "channel": { "type": "integer", "minimum": 0, "maximum": 31 },
+        "poll_interval": { "type": "string" }, "request_timeout": { "type": "string" },
+        "retries": { "type": "integer", "minimum": 0, "maximum": 5 }, "safe_on": { "type": "boolean" },
+        "power_return_policy": { "enum": ["off", "restore"] },
+        "equipment_kind": { "enum": ["outlet", "heater"] },
+        "maximum_on": { "type": "string" },
+        "required_probe_ids": { "type": "array", "maxItems": 2, "uniqueItems": true, "items": { "$ref": "#/$defs/uuid" } }
+      }
+    },
+    "esp32Endpoint": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "device_id", "alarm_rule_id", "base_url", "probe_ids", "poll_interval", "request_timeout", "fresh_for", "maximum_clock_skew", "maximum_difference_celsius"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" }, "device_id": { "$ref": "#/$defs/uuid" }, "alarm_rule_id": { "$ref": "#/$defs/uuid" },
+        "base_url": { "type": "string" }, "bearer_token_file": { "type": "string" },
+        "probe_ids": { "type": "array", "minItems": 2, "maxItems": 2, "uniqueItems": true, "items": { "$ref": "#/$defs/uuid" } },
+        "poll_interval": { "type": "string" }, "request_timeout": { "type": "string" }, "fresh_for": { "type": "string" },
+        "maximum_clock_skew": { "type": "string" }, "maximum_difference_celsius": { "type": "number", "exclusiveMinimum": 0, "maximum": 10 }
+      }
+    },
     "device": {
       "type": "object", "additionalProperties": false, "required": ["id"],
       "properties": { "id": { "$ref": "#/$defs/id" } }

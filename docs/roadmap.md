@@ -18,7 +18,8 @@ criteria. Work proceeds in order and stops when a required gate lacks evidence.
 7. Post-Prompt-7 pivot — dedicated Linux amd64 Control VM becomes the native
    systemd production target; the Pi becomes an optional display/kiosk.
 8. v0.6 Shelly and ESP32 bench — direct-LAN adapters and safe lamp-load evidence
-   from the dedicated Control VM.
+   from the dedicated Control VM. Software boundaries and fake-LAN contracts are
+   implemented; physical Control VM/lamp-load evidence remains required.
 9. v0.7 Integrations — REST v1, Home Assistant, optional InfluxDB/Grafana.
 10. v0.8 Operations beta — guided installation, Admin GUI, and multi-server
     operations.
