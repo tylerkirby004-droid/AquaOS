@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aquaos.dev/schemas/simulator/scenario/v1",
+  "title": "AquaOS deterministic simulator scenario v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "name", "seed", "start", "step", "steps", "model", "expected"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "name": {"type": "string", "minLength": 1, "maxLength": 128},
+    "seed": {"type": "integer"},
+    "start": {"type": "string", "format": "date-time"},
+    "step": {"type": "string"},
+    "steps": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "model": {"$ref": "#/$defs/model"},
+    "faults": {"type": "array", "maxItems": 10000, "items": {"$ref": "#/$defs/fault"}},
+    "expected": {"$ref": "#/$defs/expected"}
+  },
+  "$defs": {
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["initialTemperatureC", "ambientTemperatureC", "initialLevelPercent", "temperatureLowC", "temperatureHighC", "levelLowPercent", "levelHighPercent", "ambientExchangePerHour", "heaterInfluenceCPerHour", "evaporationPercentPerHour", "atoFillPercentPerHour", "sensorFreshFor"],
+      "properties": {
+        "initialTemperatureC": {"type": "number"},
+        "ambientTemperatureC": {"type": "number"},
+        "initialLevelPercent": {"type": "number", "minimum": 0, "maximum": 100},
+        "temperatureLowC": {"type": "number"},
+        "temperatureHighC": {"type": "number"},
+        "levelLowPercent": {"type": "number", "minimum": 0, "maximum": 100},
+        "levelHighPercent": {"type": "number", "minimum": 0, "maximum": 100},
+        "ambientExchangePerHour": {"type": "number", "minimum": 0},
+        "heaterInfluenceCPerHour": {"type": "number", "minimum": 0},
+        "evaporationPercentPerHour": {"type": "number", "minimum": 0},
+        "atoFillPercentPerHour": {"type": "number", "exclusiveMinimum": 0},
+        "sensorFreshFor": {"type": "string"}
+      }
+    },
+    "fault": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["at", "type"],
+      "properties": {
+        "at": {"type": "integer", "minimum": 0},
+        "duration": {"type": "integer", "minimum": 0},
+        "type": {"enum": ["sensor-noise", "sensor-drift", "sensor-stale", "relay-stuck-on", "ack-delay", "ack-loss", "broker-loss", "storage-loss", "leak", "return-pump-failure"]},
+        "value": {"type": "number"}
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "alarmCodes": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "safeTransitions": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}
+      }
+    }
+  }
+}

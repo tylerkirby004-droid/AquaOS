@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "name": "adapter-and-integration-faults",
+  "seed": 99,
+  "start": "2026-01-01T00:00:00Z",
+  "step": "1m",
+  "steps": 20,
+  "model": {
+    "initialTemperatureC": 24.9,
+    "ambientTemperatureC": 24.0,
+    "initialLevelPercent": 70.0,
+    "temperatureLowC": 24.8,
+    "temperatureHighC": 25.2,
+    "levelLowPercent": 69.0,
+    "levelHighPercent": 71.0,
+    "ambientExchangePerHour": 0.08,
+    "heaterInfluenceCPerHour": 1.2,
+    "evaporationPercentPerHour": 0.2,
+    "atoFillPercentPerHour": 2.0,
+    "sensorFreshFor": "5m"
+  },
+  "faults": [
+    {"at": 2, "duration": 3, "type": "sensor-noise", "value": 0.03},
+    {"at": 5, "duration": 5, "type": "sensor-drift", "value": 0.2},
+    {"at": 8, "duration": 2, "type": "ack-delay"},
+    {"at": 10, "duration": 2, "type": "ack-loss"},
+    {"at": 12, "duration": 4, "type": "broker-loss"},
+    {"at": 14, "duration": 4, "type": "storage-loss"}
+  ],
+  "expected": {
+    "alarmCodes": [
+      "sim.alarm.command-acknowledgement-delayed",
+      "sim.alarm.command-acknowledgement-lost"
+    ]
+  }
+}

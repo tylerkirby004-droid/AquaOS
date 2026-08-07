@@ -52,9 +52,10 @@ integration degradation, and unhealthy required services. MQTT failure can
 degrade integration health without disabling authoritative local control.
 
 The older `/healthz` and `/readyz` paths remain temporary compatibility aliases.
-No equipment or safety behavior is implemented by Prompt 1. The foundation
-simulator adapter starts no goroutines, opens no hardware connections, and
-issues no commands.
+The lifecycle simulator adapter starts no goroutines and opens no hardware
+connections. Prompt 7 adds a separate deterministic workbench and fake output
+adapter; both remain in-memory and structurally incapable of contacting real
+hardware.
 
 Prompt 3 adds transport-independent typed IDs, quantities, units, quality,
 capabilities, ownership-aware registries, and revisioned canonical state with
@@ -67,6 +68,11 @@ command request/result routing through the Core output service, retained
 availability, and reconnect reconciliation. MQTT remains outside the survival
 path. See [docs/mqtt-topics.md](docs/mqtt-topics.md) for the contract and
 Mosquitto ACL guidance.
+
+Prompt 7 adds reproducible tank and fault scenarios for temperature, level,
+heater, pumps, ATO, leaks, sensor faults, acknowledgements, and optional-service
+loss. Run the normal trace with `make simulate`; see
+[docs/simulator.md](docs/simulator.md) before authoring or changing fixtures.
 
 ## Safe development startup
 

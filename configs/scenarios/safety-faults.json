@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "name": "safety-faults",
+  "seed": 7,
+  "start": "2026-01-01T00:00:00Z",
+  "step": "5m",
+  "steps": 32,
+  "model": {
+    "initialTemperatureC": 24.7,
+    "ambientTemperatureC": 24.0,
+    "initialLevelPercent": 68.9,
+    "temperatureLowC": 24.8,
+    "temperatureHighC": 25.2,
+    "levelLowPercent": 69.0,
+    "levelHighPercent": 71.0,
+    "ambientExchangePerHour": 0.08,
+    "heaterInfluenceCPerHour": 1.2,
+    "evaporationPercentPerHour": 0.2,
+    "atoFillPercentPerHour": 2.0,
+    "sensorFreshFor": "10m"
+  },
+  "faults": [
+    {"at": 4, "duration": 3, "type": "leak"},
+    {"at": 10, "duration": 4, "type": "sensor-stale"},
+    {"at": 16, "duration": 4, "type": "relay-stuck-on"},
+    {"at": 20, "duration": 3, "type": "return-pump-failure"},
+    {"at": 24, "duration": 3, "type": "broker-loss"},
+    {"at": 27, "duration": 3, "type": "storage-loss"}
+  ],
+  "expected": {
+    "alarmCodes": [
+      "sim.alarm.leak",
+      "sim.alarm.sensor-stale",
+      "sim.alarm.relay-stuck-on",
+      "sim.alarm.return-pump-failure"
+    ],
+    "safeTransitions": ["heater:off", "return-pump:off"]
+  }
+}

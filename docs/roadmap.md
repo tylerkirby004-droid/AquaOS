@@ -13,7 +13,8 @@ criteria. Work proceeds in order and stops when a required gate lacks evidence.
    command policy, interlocks, watchdogs, and alarm lifecycle foundations.
 5. v0.4 MQTT contracts — implemented: versioned topics, envelopes, codecs,
    bounded idempotency, ACLs, and reconnect/reconciliation behavior.
-6. v0.5 Simulator — deterministic tank and fault scenarios without real hardware.
+6. v0.5 Simulator — implemented: deterministic tank physics, fake adapter,
+   bounded scenario fixtures, fault traces, and hardware isolation tests.
 7. v0.6 Shelly and ESP32 bench — safe lamp-load hardware evidence on Pi 4B.
 8. v0.7 Integrations — REST v1, Home Assistant, optional InfluxDB/Grafana.
 9. v0.8 Operations beta — guided installation and multi-server operations.

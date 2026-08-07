@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "name": "normal-temperature-supervision",
+  "seed": 42,
+  "start": "2026-01-01T00:00:00Z",
+  "step": "5m",
+  "steps": 96,
+  "model": {
+    "initialTemperatureC": 24.9,
+    "ambientTemperatureC": 24.0,
+    "initialLevelPercent": 70.0,
+    "temperatureLowC": 24.8,
+    "temperatureHighC": 25.2,
+    "levelLowPercent": 69.0,
+    "levelHighPercent": 71.0,
+    "ambientExchangePerHour": 0.08,
+    "heaterInfluenceCPerHour": 1.2,
+    "evaporationPercentPerHour": 0.2,
+    "atoFillPercentPerHour": 2.0,
+    "sensorFreshFor": "15m"
+  },
+  "expected": {}
+}
