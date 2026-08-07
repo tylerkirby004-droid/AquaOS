@@ -1,0 +1,11 @@
+[project]
+name = "aquaos-vision"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["paho-mqtt==2.1.0"]
+
+[project.optional-dependencies]
+dev = ["pytest==8.3.5"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

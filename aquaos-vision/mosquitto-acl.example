@@ -1,0 +1,5 @@
+# Vision may consume only explicitly provisioned assets and publish observations.
+user aquaos-vision
+topic read aquaos/v1/vision/assets/+
+topic write aquaos/v1/vision/observations/+
+# No command, desired-state, configuration, or actuator topic is granted.

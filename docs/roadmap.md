@@ -34,3 +34,7 @@ criteria. Work proceeds in order and stops when a required gate lacks evidence.
 
 Optional Python AI work is Prompt 15 and may not be introduced earlier or
 become necessary for critical operation.
+
+The Prompt 15 `aquaos-vision/` scaffold is now an optional deployment unit with
+observation-only ACLs and untrusted Go-side validation. It ships no model and is
+not started or imported by Core.

@@ -18,6 +18,11 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: aquaos-vision/pyproject.toml
       - name: Formatting
         run: test -z "$(gofmt -l ./cmd ./internal ./pkg)"
       - name: Vet
@@ -41,6 +46,10 @@ jobs:
         run: go run github.com/google/go-licenses@v1.6.0 check ./... --allowed_licenses=Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MIT,MPL-2.0
       - name: Unit and race tests
         run: go test -race -coverprofile=coverage.out ./...
+      - name: Optional vision contract tests
+        run: |
+          python -m pip install ./aquaos-vision[dev]
+          python -m pytest aquaos-vision/tests
       - name: Linux builds
         shell: bash
         run: |
