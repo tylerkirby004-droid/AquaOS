@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aquaos.dev/schemas/config/v1",
+  "title": "AquaOS configuration schema v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "application": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "log_level": { "enum": ["debug", "info", "warn", "error"] },
+        "startup_timeout": { "type": "string" },
+        "shutdown_timeout": { "type": "string" },
+        "component_timeout": { "type": "string" },
+        "event_concurrency": { "type": "integer", "minimum": 1, "maximum": 4096 }
+      }
+    },
+    "http": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "address": { "type": "string", "minLength": 1 },
+        "read_timeout": { "type": "string" },
+        "write_timeout": { "type": "string" },
+        "idle_timeout": { "type": "string" }
+      }
+    },
+    "mqtt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "site_id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$" },
+        "broker": { "type": "string" },
+        "client_id": { "type": "string" },
+        "username": { "type": "string" },
+        "connect_timeout": { "type": "string" },
+        "keep_alive": { "type": "string" },
+        "disconnect_quiesce": { "type": "string" },
+        "required_for_ready": { "type": "boolean" },
+        "maximum_payload": { "type": "integer", "minimum": 256, "maximum": 16777216 },
+        "queue_capacity": { "type": "integer", "minimum": 1, "maximum": 65536 },
+        "idempotency_capacity": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "reconnect_minimum": { "type": "string" },
+        "reconnect_maximum": { "type": "string" },
+        "reconnect_jitter": { "type": "number", "minimum": 0, "maximum": 0.5 }
+      }
+    },
+    "simulator": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "enabled": { "type": "boolean" } }
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "devices": { "type": "array", "items": { "$ref": "#/$defs/device" } },
+        "sensors": { "type": "array", "items": { "$ref": "#/$defs/sensor" } },
+        "equipment": { "type": "array", "items": { "$ref": "#/$defs/equipment" } }
+      }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$" },
+    "device": {
+      "type": "object", "additionalProperties": false, "required": ["id"],
+      "properties": { "id": { "$ref": "#/$defs/id" } }
+    },
+    "sensor": {
+      "type": "object", "additionalProperties": false, "required": ["id", "device_id", "unit"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" }, "device_id": { "$ref": "#/$defs/id" },
+        "unit": { "enum": ["celsius", "fahrenheit", "pH", "ppt", "liters_per_hour", "boolean"] },
+        "minimum": { "type": "number" }, "maximum": { "type": "number" }
+      }
+    },
+    "equipment": {
+      "type": "object", "additionalProperties": false, "required": ["id", "device_id"],
+      "properties": { "id": { "$ref": "#/$defs/id" }, "device_id": { "$ref": "#/$defs/id" } }
+    }
+  }
+}
