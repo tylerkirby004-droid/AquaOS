@@ -34,7 +34,6 @@ import (
 	"github.com/tylerkirby004-droid/aquaos/internal/sensors"
 	"github.com/tylerkirby004-droid/aquaos/internal/state"
 	"github.com/tylerkirby004-droid/aquaos/internal/storage"
-	"github.com/tylerkirby004-droid/aquaos/internal/subsystem"
 )
 
 // Container owns the concrete object graph constructed during bootstrap.
@@ -122,7 +121,29 @@ func New(cfg config.Config, configPath string, logger *slog.Logger, supplied ...
 	if err != nil {
 		return nil, fmt.Errorf("construct output service: %w", err)
 	}
-	storageManager := subsystem.NewPassive("storage")
+	var storageManager storage.Storage = storage.NewDisabled()
+	if cfg.Storage.InfluxDB.Enabled {
+		token, tokenErr := readSecretFile(cfg.Storage.InfluxDB.TokenFile)
+		if tokenErr != nil {
+			return nil, fmt.Errorf("construct InfluxDB credentials: %w", tokenErr)
+		}
+		client, clientErr := storage.NewInfluxClient(storage.InfluxConfig{URL: cfg.Storage.InfluxDB.URL, Organization: cfg.Storage.InfluxDB.Organization, Bucket: cfg.Storage.InfluxDB.Bucket, Token: token}, &http.Client{Timeout: cfg.Storage.InfluxDB.WriteTimeout})
+		if clientErr != nil {
+			return nil, fmt.Errorf("construct InfluxDB client: %w", clientErr)
+		}
+		writer, writerErr := storage.New(storage.Config{QueueCapacity: cfg.Storage.InfluxDB.QueueCapacity, BatchSize: cfg.Storage.InfluxDB.BatchSize, FlushInterval: cfg.Storage.InfluxDB.FlushInterval, RetryMinimum: cfg.Storage.InfluxDB.RetryMinimum, RetryMaximum: cfg.Storage.InfluxDB.RetryMaximum, WriteTimeout: cfg.Storage.InfluxDB.WriteTimeout}, client, logger.With("component", "storage"))
+		if writerErr != nil {
+			return nil, fmt.Errorf("construct storage writer: %w", writerErr)
+		}
+		sink, sinkErr := storage.NewEventSink(writer, logger.With("component", "storage-events"))
+		if sinkErr != nil {
+			return nil, sinkErr
+		}
+		if _, sinkErr = sink.Attach(eventBus); sinkErr != nil {
+			return nil, fmt.Errorf("attach storage event sink: %w", sinkErr)
+		}
+		storageManager = writer
+	}
 	apiOptions := []api.Option{api.WithDependencies(api.Dependencies{Devices: deviceRegistry, Sensors: sensorManager, Equipment: equipmentManager, State: stateManager, Commands: outputService, Alarms: alarmManager, Configuration: configurationManager})}
 	if cfg.HTTP.BearerTokenFile != "" {
 		token, tokenErr := readSecretFile(cfg.HTTP.BearerTokenFile)
@@ -237,11 +258,14 @@ func New(cfg config.Config, configPath string, logger *slog.Logger, supplied ...
 		if component == homeAssistant && homeAssistant != nil {
 			required = false
 		}
+		if component == storageManager && cfg.Storage.InfluxDB.Enabled {
+			required = false
+		}
 		healthManager.RegisterComponent(component, required)
 	}
 	components := []health.Component{healthManager}
 	for _, component := range monitored {
-		if component == mqttClient || component == homeAssistant {
+		if component == mqttClient || component == homeAssistant || (component == storageManager && cfg.Storage.InfluxDB.Enabled) {
 			components = append(components, lifecycle.NewOptional(component, logger.With("component", "lifecycle")))
 		} else {
 			components = append(components, component)

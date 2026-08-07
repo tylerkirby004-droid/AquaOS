@@ -42,6 +42,10 @@ without becoming a verifier for secret guesses.
 bounds UI-originated commands. `tombstones` explicitly clear retained entities
 removed across a process restart; see [home-assistant.md](home-assistant.md).
 
+`storage.influxdb` controls optional historical persistence. The API token is
+read only from `token_file`. All queue, batch, flush, retry, and write-timeout
+bounds are mandatory even while disabled; see [persistence.md](persistence.md).
+
 ## Prompt 8 direct adapters
 
 `adapters.shelly` and `adapters.esp32` are disabled by default. Enabling either

@@ -225,6 +225,7 @@ func changesBetween(current, next Config) []Change {
 	add("simulator", false, "adapter activation requires restart", current.Simulator, next.Simulator)
 	add("adapters", false, "direct adapter identity, safety, and connection changes require restart", current.Adapters, next.Adapters)
 	add("bench", false, "bench activation guard changes require restart", current.Bench, next.Bench)
+	add("storage", false, "storage pipeline changes require restart", current.Storage, next.Storage)
 	add("inventory", false, "inventory changes require validated registry activation", current.Inventory, next.Inventory)
 	return changes
 }

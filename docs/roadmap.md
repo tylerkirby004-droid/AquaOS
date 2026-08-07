@@ -22,8 +22,8 @@ criteria. Work proceeds in order and stops when a required gate lacks evidence.
    implemented; physical Control VM/lamp-load evidence remains required.
 9. v0.7 Integrations — REST v1 and Home Assistant MQTT Discovery are
    implemented with authenticated/application-service-only mutations, stable
-   entity identity, retained cleanup, and optional-outage isolation. Optional
-   InfluxDB/Grafana follows.
+   entity identity, retained cleanup, and optional-outage isolation. Bounded
+   optional InfluxDB persistence and Grafana examples are also implemented.
 10. v0.8 Operations beta — guided installation, Admin GUI, and multi-server
     operations.
 11. v0.9 Release candidate — hardening, matrix tests, and 72-hour soak.

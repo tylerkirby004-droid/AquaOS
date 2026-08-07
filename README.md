@@ -106,6 +106,10 @@ Prompt 10 adds optional Home Assistant MQTT Discovery and a narrow command
 bridge that always routes through the Core output service. See
 [docs/home-assistant.md](docs/home-assistant.md).
 
+Prompt 11 adds bounded optional InfluxDB persistence and sample Grafana
+provisioning. Storage failure never blocks control; see
+[docs/persistence.md](docs/persistence.md).
+
 ## Safe development startup
 
 Requirements:

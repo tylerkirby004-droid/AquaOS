@@ -41,7 +41,28 @@ type Config struct {
 	Simulator     Simulator   `yaml:"simulator" json:"simulator"`
 	Adapters      Adapters    `yaml:"adapters" json:"adapters"`
 	Bench         Bench       `yaml:"bench" json:"bench"`
+	Storage       Storage     `yaml:"storage" json:"storage"`
 	Inventory     Inventory   `yaml:"inventory" json:"inventory"`
+}
+
+// Storage configures optional bounded historical persistence.
+type Storage struct {
+	InfluxDB InfluxDB `yaml:"influxdb" json:"influxdb"`
+}
+
+// InfluxDB configures the optional InfluxDB v2 writer.
+type InfluxDB struct {
+	Enabled       bool          `yaml:"enabled" json:"enabled"`
+	URL           string        `yaml:"url" json:"url"`
+	Organization  string        `yaml:"organization" json:"organization"`
+	Bucket        string        `yaml:"bucket" json:"bucket"`
+	TokenFile     string        `yaml:"token_file" json:"-"`
+	QueueCapacity int           `yaml:"queue_capacity" json:"queueCapacity"`
+	BatchSize     int           `yaml:"batch_size" json:"batchSize"`
+	FlushInterval time.Duration `yaml:"flush_interval" json:"flushInterval"`
+	RetryMinimum  time.Duration `yaml:"retry_minimum" json:"retryMinimum"`
+	RetryMaximum  time.Duration `yaml:"retry_maximum" json:"retryMaximum"`
+	WriteTimeout  time.Duration `yaml:"write_timeout" json:"writeTimeout"`
 }
 
 // Application contains process lifecycle and logging configuration.
@@ -208,6 +229,7 @@ func Defaults() Config {
 		HTTP:          HTTP{Address: "localhost:8080", ReadTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second, MaximumRequestBytes: 64 * 1024, MutationRate: 10, MutationBurst: 20},
 		MQTT:          MQTT{ConnectTimeout: 10 * time.Second, KeepAlive: 30 * time.Second, DisconnectQuiesce: 250 * time.Millisecond, MaximumPayload: 256 * 1024, QueueCapacity: 256, IdempotencyCapacity: 4096, ReconnectMinimum: time.Second, ReconnectMaximum: time.Minute, ReconnectJitter: 0.2, HomeAssistant: HomeAssistant{CommandTTL: 10 * time.Second}},
 		Simulator:     Simulator{Enabled: true},
+		Storage:       Storage{InfluxDB: InfluxDB{QueueCapacity: 4096, BatchSize: 200, FlushInterval: 5 * time.Second, RetryMinimum: time.Second, RetryMaximum: time.Minute, WriteTimeout: 5 * time.Second}},
 	}
 }
 
@@ -396,6 +418,25 @@ func (c Config) Validate() error {
 	}
 	if c.MQTT.HomeAssistant.CommandTTL <= 0 || c.MQTT.HomeAssistant.CommandTTL > time.Minute {
 		return validationError("mqtt.home_assistant.command_ttl", "out_of_range", "must be greater than zero and at most 1m")
+	}
+	storage := c.Storage.InfluxDB
+	if storage.QueueCapacity < 1 || storage.QueueCapacity > 1_000_000 || storage.BatchSize < 1 || storage.BatchSize > storage.QueueCapacity {
+		return validationError("storage.influxdb.queue_capacity", "out_of_range", "queue and batch bounds are invalid")
+	}
+	if storage.FlushInterval <= 0 || storage.RetryMinimum <= 0 || storage.RetryMaximum < storage.RetryMinimum || storage.RetryMaximum > 10*time.Minute || storage.WriteTimeout <= 0 || storage.WriteTimeout > time.Minute {
+		return validationError("storage.influxdb.retry_maximum", "out_of_range", "storage timing bounds are invalid")
+	}
+	if storage.Enabled {
+		parsed, err := url.Parse(storage.URL)
+		if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+			return validationError("storage.influxdb.url", "invalid_uri", "must be an HTTP or HTTPS origin")
+		}
+		if parsed.User != nil {
+			return validationError("storage.influxdb.url", "secret_inline", "must not contain credentials")
+		}
+		if storage.Organization == "" || storage.Bucket == "" || storage.TokenFile == "" {
+			return validationError("storage.influxdb", "required", "organization, bucket, and token_file are required when enabled")
+		}
 	}
 	for index, item := range c.MQTT.HomeAssistant.Tombstones {
 		if !haIdentifierPattern.MatchString(item.Component) || !identifierPattern.MatchString(item.ObjectID) {

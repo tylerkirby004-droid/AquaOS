@@ -1,0 +1,28 @@
+{
+  "title": "AquaOS Overview",
+  "uid": "aquaos-overview-v1",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Validated measurements",
+      "datasource": { "type": "influxdb", "uid": "aquaos-influxdb" },
+      "targets": [
+        { "query": "from(bucket: v.defaultBucket) |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"aquaos_measurements_v1\" and r._field == \"value\")" }
+      ],
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Command outcomes",
+      "datasource": { "type": "influxdb", "uid": "aquaos-influxdb" },
+      "targets": [
+        { "query": "from(bucket: v.defaultBucket) |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"aquaos_command_outcomes_v1\") |> aggregateWindow(every: v.windowPeriod, fn: count)" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 }
+    }
+  ]
+}

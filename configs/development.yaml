@@ -54,6 +54,20 @@ bench:
   enabled: false
   safe_load_acknowledged: false
 
+storage:
+  influxdb:
+    enabled: false
+    url: ""
+    organization: ""
+    bucket: ""
+    token_file: ""
+    queue_capacity: 128
+    batch_size: 32
+    flush_interval: 1s
+    retry_minimum: 100ms
+    retry_maximum: 5s
+    write_timeout: 1s
+
 inventory:
   devices: []
   sensors: []
