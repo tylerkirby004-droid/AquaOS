@@ -4,7 +4,7 @@
 | --- | --- | --- |
 | AquaOS Control VM | 1–2 vCPU, 1–2 GB RAM, 8–16 GB disk | Authoritative native Linux amd64 Core under systemd |
 | Home Assistant OS VM | 2 vCPU, 4 GB RAM, 32 GB disk | UI, notifications, integrations |
-| Docker VM/LXC | 4 vCPU, 8 GB RAM, 80 GB+ disk | Mosquitto, InfluxDB, Grafana, Node-RED |
+| Docker VM/LXC | 4 vCPU, 8 GB RAM, 80 GB+ disk | Mosquitto, InfluxDB, Grafana; advanced add-ons are explicit |
 | AI VM | 4–8 vCPU, 16 GB+ RAM, GPU as available | Optional non-critical analytics |
 
 The Control VM is dedicated, minimal Linux with bridged LAN networking and a

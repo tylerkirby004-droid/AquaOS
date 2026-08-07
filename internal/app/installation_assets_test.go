@@ -32,8 +32,24 @@ func TestOptionalServicesComposeUsesCurrentAquaOSPipeline(t *testing.T) {
 			t.Fatalf("obsolete pre-v1 pipeline %q is enabled", obsolete)
 		}
 	}
-	if nodeRED, exists := document.Services["nodered"]; !exists || len(nodeRED.Profiles) != 1 || nodeRED.Profiles[0] != "nodered" {
-		t.Fatal("Node-RED must remain explicitly opt-in")
+	if _, exists := document.Services["nodered"]; exists {
+		t.Fatal("Node-RED must not be part of the standard services stack")
+	}
+}
+
+func TestNodeREDIsDefinedOnlyAsAnAdvancedAddOn(t *testing.T) {
+	payload, err := os.ReadFile("../../infrastructure/docker/compose.nodered.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document struct {
+		Services map[string]any `yaml:"services"`
+	}
+	if err = yaml.Unmarshal(payload, &document); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := document.Services["nodered"]; !exists {
+		t.Fatal("advanced Node-RED add-on definition is missing")
 	}
 }
 

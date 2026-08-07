@@ -31,6 +31,7 @@ jobs:
           cp infrastructure/docker/.env.example infrastructure/docker/.env
           docker compose -f docker-compose.yml config --quiet
           docker compose -f infrastructure/docker/compose.yaml config --quiet
+          docker compose -f infrastructure/docker/compose.yaml -f infrastructure/docker/compose.nodered.yaml config --quiet
       - name: Vet
         run: go vet ./...
       - name: Staticcheck

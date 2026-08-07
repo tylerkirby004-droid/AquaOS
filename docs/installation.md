@@ -26,7 +26,7 @@ host except Proxmox itself.
 | Mosquitto | separate services VM or HAOS broker app | no | 1883 lab; 8883 TLS deployment |
 | Home Assistant OS | separate VM | no | 8123/TCP |
 | InfluxDB and Grafana | separate services VM | no | 8086/TCP, 3000/TCP |
-| Node-RED | separate services VM, opt-in | no | 1880/TCP |
+| Node-RED | advanced add-on only | no | 1880/TCP when explicitly installed |
 | `aquaos-vision` | separate optional container host | no | 8091/TCP health |
 | Display kiosk | Raspberry Pi 4B | no | outbound browser access only |
 
@@ -218,7 +218,7 @@ go run ./cmd/aquaos-sim -scenario configs/scenarios/adapter-and-integration-faul
 Each command must complete deterministically. Do not confuse these traces with
 physical hardware evidence.
 
-## 7. Install optional Mosquitto, InfluxDB, Grafana, and Node-RED
+## 7. Install optional Mosquitto, InfluxDB, and Grafana
 
 Create a separate Debian services VM. Do not put this stack on the Proxmox host
 or make it a Core dependency. Install Docker Engine and the Compose plugin from
@@ -262,14 +262,10 @@ curl --fail http://127.0.0.1:8086/health
 curl --fail http://127.0.0.1:3000/api/health
 ```
 
-Node-RED is optional and has no AquaOS authority. Start it only if needed:
-
-```sh
-docker compose --profile nodered up -d nodered
-```
-
-Secure port 1880 and configure Node-RED authentication before LAN use. Never
-give Node-RED Core, adapter, or administrator credentials.
+Node-RED is not installed by this standard procedure. Advanced operators can
+find its separately isolated add-on instructions in
+`../infrastructure/docker/README.md`. It must never contain aquarium control or
+safety logic.
 
 ### Broker TLS
 
@@ -568,8 +564,8 @@ An installation is functioning only when all applicable checks pass:
 
 - `aquaosctl verify` passes after install, process restart, and VM reboot.
 - `/health/live` and `/health/ready` return success for required components.
-- Core starts with Mosquitto, Home Assistant, InfluxDB/Grafana, Node-RED,
-  vision, Internet, and display Pi all stopped.
+- Core starts with Mosquitto, Home Assistant, InfluxDB/Grafana, every advanced
+  integration add-on, vision, Internet, and display Pi all stopped.
 - MQTT ACL negative tests deny Home Assistant and AI actuator/desired-state
   privileges.
 - Home Assistant discovery identity remains stable after restart.

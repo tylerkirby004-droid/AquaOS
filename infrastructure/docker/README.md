@@ -2,8 +2,8 @@
 
 This Compose project is intended for a separate optional-services Docker guest,
 not the Proxmox host or AquaOS Control VM. It runs Mosquitto, InfluxDB, and
-Grafana. Node-RED is opt-in with the `nodered` profile. Core writes directly to
-InfluxDB; the obsolete Reef-Pi Telegraf bridge and publisher are not started.
+Grafana. Core writes directly to InfluxDB; the obsolete Reef-Pi Telegraf bridge
+and publisher are not started.
 
 Service images are pinned to a major or minor release line so a routine pull
 cannot silently cross a breaking major-version boundary. Review release notes,
@@ -25,3 +25,19 @@ Copy `.env.example` to `.env`, replace every placeholder, then run `docker
 compose config` and `docker compose up -d`. Grafana provisions the InfluxDB
 datasource and starter dashboard and is available on port 3000. See
 `docs/installation.md` for firewall, AquaOS, and Home Assistant steps.
+
+## Advanced Node-RED add-on
+
+Node-RED is excluded from the standard AquaOS installation. It is neither an
+AquaOS control component nor a supported location for aquarium business logic.
+An advanced operator who needs a non-authoritative integration bridge may start
+the separately defined add-on explicitly:
+
+```text
+docker compose -f compose.yaml -f compose.nodered.yaml config --quiet
+docker compose -f compose.yaml -f compose.nodered.yaml up -d nodered
+```
+
+Secure port 1880 and configure Node-RED authentication before LAN access. Never
+give it AquaOS administrator, adapter, or actuator credentials. AquaOS must
+continue functioning when this add-on is absent or stopped.

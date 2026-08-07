@@ -1,0 +1,17 @@
+# Node-RED is an advanced, non-authoritative integration add-on. It is kept in
+# a separate Compose file so the standard AquaOS services installation cannot
+# start it accidentally.
+services:
+  nodered:
+    image: nodered/node-red:5.0
+    restart: unless-stopped
+    ports:
+      - "1880:1880"
+    volumes:
+      - nodered-data:/data
+    depends_on:
+      - mosquitto
+      - influxdb
+
+volumes:
+  nodered-data:
