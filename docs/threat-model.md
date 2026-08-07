@@ -8,7 +8,7 @@ blocks release unless this document names an owner and an explicit remediation.
 | Malicious LAN/API client | bearer authentication, role authorization, bounded bodies and mutation rate | `internal/api/*_test.go` | Core/mitigated |
 | Compromised Home Assistant or AI | MQTT ACL privilege separation; optional integrations cannot issue Core commands | `internal/mqtt/acl_test.go` | Integrations/mitigated |
 | Malicious MQTT publisher | versioned validation, idempotency, ACL-denial cases, bounded payloads | MQTT codec/ACL tests | Messaging/mitigated |
-| Admin browser abuse | loopback default, no cookies, same-origin mutations, CSP, no-store, anti-framing headers | `internal/admin/server_test.go` | Operations/mitigated |
+| Admin browser abuse | loopback default, bounded authentication/mutation limits, no cookies, same-origin mutations, CSP, no-store, anti-framing headers | `internal/admin/server_test.go` | Operations/mitigated |
 | Policy bypass | HTTP and Admin handlers call application-service interfaces only; adapters are not exposed | API/Admin service-call tests and package boundaries | Core/mitigated |
 | Secret leakage | external token files, redacted diagnostics, no browser persistence, secret scanning | config/API tests and CI | Security/mitigated |
 | Supply-chain compromise | minimal modules, vulnerability/license/static/secret CI gates, signed upgrade artifacts | CI and operations signature tests | Release/mitigated |

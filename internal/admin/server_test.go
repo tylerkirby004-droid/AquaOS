@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -13,10 +14,13 @@ import (
 	"github.com/tylerkirby004-droid/aquaos/internal/operations"
 )
 
-type fakeOperations struct{ repairs int }
+type fakeOperations struct {
+	repairs   int
+	statusErr error
+}
 
-func (*fakeOperations) GetStatus(context.Context, operations.Actor) (operations.Status, error) {
-	return operations.Status{Installed: true, Version: "test"}, nil
+func (f *fakeOperations) GetStatus(context.Context, operations.Actor) (operations.Status, error) {
+	return operations.Status{Installed: true, Version: "test"}, f.statusErr
 }
 func (*fakeOperations) Verify(context.Context, operations.Actor) (operations.Diagnostics, error) {
 	return operations.Diagnostics{}, nil
@@ -54,7 +58,7 @@ func (*fakeOperations) ApplyConfiguration(context.Context, operations.Actor, []b
 }
 func newTestServer(t *testing.T, service Operations) *Server {
 	t.Helper()
-	server, err := New(Config{Address: "127.0.0.1:0", Token: "test-token-with-at-least-32-characters", MaximumRequestBytes: 1024, ShutdownTimeout: time.Second}, service, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	server, err := New(Config{Address: "127.0.0.1:0", Token: "test-token-with-at-least-32-characters", MaximumRequestBytes: 1024, ShutdownTimeout: time.Second, AuthenticationRate: 100, AuthenticationBurst: 100, MutationRate: 100, MutationBurst: 100}, service, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,5 +115,33 @@ func TestAdminSecurityHeadersAndOriginPolicy(t *testing.T) {
 	}
 	if response.Header().Get("X-Frame-Options") != "DENY" || response.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal("required browser security headers were not set")
+	}
+}
+
+func TestAdminAuthenticationLimiterIsBoundedAndEnforced(t *testing.T) {
+	server := newTestServer(t, &fakeOperations{})
+	server.authentication = newRequestLimiter(1, 1, 2)
+	for attempt := 0; attempt < 2; attempt++ {
+		response := httptest.NewRecorder()
+		server.server.Handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/status", nil))
+		if attempt == 1 && response.Code != http.StatusTooManyRequests {
+			t.Fatalf("status = %d", response.Code)
+		}
+	}
+	server.authentication.allow("second", time.Now())
+	server.authentication.allow("third", time.Now())
+	if len(server.authentication.clients) != 2 {
+		t.Fatalf("clients = %d", len(server.authentication.clients))
+	}
+}
+
+func TestAdminOperationErrorIsNotExposed(t *testing.T) {
+	server := newTestServer(t, &fakeOperations{statusErr: errors.New("secret=/etc/aquaos/token")})
+	request := httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	request.Header.Set("Authorization", "Bearer test-token-with-at-least-32-characters")
+	response := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(response, request)
+	if strings.Contains(response.Body.String(), "secret") || strings.Contains(response.Body.String(), "/etc/aquaos/token") {
+		t.Fatalf("internal error leaked: %s", response.Body.String())
 	}
 }

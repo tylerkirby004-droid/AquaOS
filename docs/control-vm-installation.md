@@ -37,10 +37,16 @@ Start the optional recovery GUI only when needed:
 ```sh
 sudo /opt/aquaos/bin/aquaos-admin \
   -address 127.0.0.1:8090 \
-  -token-file /etc/aquaos/secrets/admin.token
+  -token-file /etc/aquaos/secrets/admin.token \
+  -authentication-rate 5 -authentication-burst 10 \
+  -mutation-rate 2 -mutation-burst 4
 ```
 
-Use an SSH tunnel for remote browser access. Do not expose this recovery listener broadly on the LAN. Prompt 13 adds the full browser/session hardening gate.
+Use an SSH tunnel for remote browser access. Do not expose this recovery
+listener broadly on the LAN. Rate limits are external flags so operators can
+tighten them for their management path; both client maps are bounded. Prompt 13
+also requires long random tokens, same-origin mutations, no browser credential
+persistence, restrictive security headers, and redacted client errors.
 
 ## Replacement-host recovery
 

@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -48,6 +49,10 @@ type Config struct {
 	Token               string
 	MaximumRequestBytes int64
 	ShutdownTimeout     time.Duration
+	AuthenticationRate  int
+	AuthenticationBurst int
+	MutationRate        int
+	MutationBurst       int
 }
 
 // Server owns the authenticated Admin GUI listener.
@@ -62,11 +67,13 @@ type Server struct {
 	cancel           context.CancelFunc
 	done             chan struct{}
 	cancellationDone chan struct{}
+	authentication   *requestLimiter
+	mutations        *requestLimiter
 }
 
 // New constructs an Admin GUI server without starting it.
 func New(cfg Config, service Operations, logger *slog.Logger) (*Server, error) {
-	if cfg.Address == "" || len(cfg.Token) < 32 || cfg.MaximumRequestBytes < 1024 || cfg.MaximumRequestBytes > 64*1024*1024 || cfg.ShutdownTimeout <= 0 {
+	if cfg.Address == "" || len(cfg.Token) < 32 || cfg.MaximumRequestBytes < 1024 || cfg.MaximumRequestBytes > 64*1024*1024 || cfg.ShutdownTimeout <= 0 || cfg.AuthenticationRate < 1 || cfg.AuthenticationBurst < 1 || cfg.MutationRate < 1 || cfg.MutationBurst < 1 {
 		return nil, errors.New("admin listener, token, and safe bounds are required")
 	}
 	if service == nil || logger == nil {
@@ -76,7 +83,7 @@ func New(cfg Config, service Operations, logger *slog.Logger) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	result := &Server{cfg: cfg, operations: service, logger: logger}
+	result := &Server{cfg: cfg, operations: service, logger: logger, authentication: newRequestLimiter(cfg.AuthenticationRate, cfg.AuthenticationBurst, 1024), mutations: newRequestLimiter(cfg.MutationRate, cfg.MutationBurst, 1024)}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health/live", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, map[string]string{"status": "alive"}) })
 	mux.Handle("GET /admin/", http.StripPrefix("/admin/", http.FileServer(http.FS(web))))
@@ -180,9 +187,20 @@ func (s *Server) Health() health.Status {
 
 func (s *Server) authorize(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		key := remoteKey(r)
+		if !s.authentication.allow(key, time.Now()) {
+			w.Header().Set("Retry-After", "1")
+			writeProblem(w, http.StatusTooManyRequests, "rate_limited", "Authentication rate limit exceeded.")
+			return
+		}
 		provided := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
 		if len(provided) != len(s.cfg.Token) || subtle.ConstantTimeCompare([]byte(provided), []byte(s.cfg.Token)) != 1 {
 			writeProblem(w, 401, "authentication_required", "Valid bearer credentials are required.")
+			return
+		}
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && !s.mutations.allow(key, time.Now()) {
+			w.Header().Set("Retry-After", "1")
+			writeProblem(w, http.StatusTooManyRequests, "rate_limited", "Mutation rate limit exceeded.")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -208,11 +226,11 @@ func (s *Server) secure(next http.Handler) http.Handler {
 func actor() operations.Actor { return operations.Actor{ID: "admin-gui", Administrator: true} }
 func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	value, err := s.operations.GetStatus(r.Context(), actor())
-	respond(w, value, err)
+	s.respond(w, value, err)
 }
 func (s *Server) verify(w http.ResponseWriter, r *http.Request) {
 	value, err := s.operations.Verify(r.Context(), actor())
-	respond(w, value, err)
+	s.respond(w, value, err)
 }
 
 type dryRunRequest struct {
@@ -225,7 +243,7 @@ func (s *Server) repair(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := s.operations.Repair(r.Context(), actor(), request.DryRun)
-	respond(w, value, err)
+	s.respond(w, value, err)
 }
 func (s *Server) rollback(w http.ResponseWriter, r *http.Request) {
 	var request dryRunRequest
@@ -233,7 +251,7 @@ func (s *Server) rollback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := s.operations.Rollback(r.Context(), actor(), request.DryRun)
-	respond(w, value, err)
+	s.respond(w, value, err)
 }
 
 type installRequest struct {
@@ -258,7 +276,7 @@ func (s *Server) install(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := s.operations.Install(r.Context(), operations.InstallRequest{Actor: actor(), Version: request.Version, Binary: binary, SHA256: request.SHA256, Signature: signature, PublicKey: key, Configuration: configuration, ControlVMAcknowledged: request.ControlVMAcknowledged, DryRun: request.DryRun})
-	respond(w, value, err)
+	s.respond(w, value, err)
 }
 
 type upgradeRequest struct {
@@ -281,12 +299,12 @@ func (s *Server) upgrade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := s.operations.Upgrade(r.Context(), operations.UpgradeRequest{Actor: actor(), Version: request.Version, Binary: binary, SHA256: request.SHA256, Signature: signature, PublicKey: key, DryRun: request.DryRun})
-	respond(w, value, err)
+	s.respond(w, value, err)
 }
 func (s *Server) backup(w http.ResponseWriter, r *http.Request) {
 	payload, err := s.operations.Backup(r.Context(), actor())
 	if err != nil {
-		writeProblem(w, 400, "operation_failed", err.Error())
+		s.operationFailed(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/zip")
@@ -302,7 +320,7 @@ func (s *Server) restore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := s.operations.Restore(r.Context(), actor(), payload, dryRun)
-	respond(w, value, err)
+	s.respond(w, value, err)
 }
 
 type uninstallRequest struct {
@@ -316,7 +334,7 @@ func (s *Server) uninstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := s.operations.Uninstall(r.Context(), actor(), request.PreserveData, request.DryRun)
-	respond(w, value, err)
+	s.respond(w, value, err)
 }
 func (s *Server) validateConfiguration(w http.ResponseWriter, r *http.Request) {
 	payload, ok := s.readPayload(w, r)
@@ -324,7 +342,7 @@ func (s *Server) validateConfiguration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := s.operations.ValidateConfiguration(r.Context(), actor(), payload)
-	respond(w, value, err)
+	s.respond(w, value, err)
 }
 func (s *Server) applyConfiguration(w http.ResponseWriter, r *http.Request) {
 	payload, ok := s.readPayload(w, r)
@@ -332,7 +350,7 @@ func (s *Server) applyConfiguration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := s.operations.ApplyConfiguration(r.Context(), actor(), payload, r.URL.Query().Get("dryRun") == "true")
-	respond(w, value, err)
+	s.respond(w, value, err)
 }
 func (s *Server) readPayload(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 	payload, err := io.ReadAll(io.LimitReader(r.Body, s.cfg.MaximumRequestBytes+1))
@@ -378,12 +396,16 @@ func decodeArtifact(binaryValue, signatureValue, keyValue, configurationValue st
 	}
 	return binary, signature, ed25519.PublicKey(key), configuration, nil
 }
-func respond(w http.ResponseWriter, value any, err error) {
+func (s *Server) respond(w http.ResponseWriter, value any, err error) {
 	if err != nil {
-		writeProblem(w, 400, "operation_failed", err.Error())
+		s.operationFailed(w, err)
 		return
 	}
 	writeJSON(w, 200, value)
+}
+func (s *Server) operationFailed(w http.ResponseWriter, err error) {
+	s.logger.Warn("Admin operation rejected", "error_type", fmt.Sprintf("%T", err))
+	writeProblem(w, http.StatusBadRequest, "operation_failed", "The requested operation was rejected. Review server diagnostics for details.")
 }
 func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

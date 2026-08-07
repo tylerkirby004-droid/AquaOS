@@ -69,6 +69,18 @@ func TestProtectedEndpointRejectsUnauthorizedRequest(t *testing.T) {
 	}
 }
 
+func TestProtectedEndpointRateLimitsAuthenticationAttempts(t *testing.T) {
+	server := newSecuredTestServer(t, Dependencies{})
+	server.authentication = newRateLimiter(1, 1)
+	for attempt := 0; attempt < 2; attempt++ {
+		response := httptest.NewRecorder()
+		server.server.Handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/system", nil))
+		if attempt == 1 && response.Code != http.StatusTooManyRequests {
+			t.Fatalf("status = %d", response.Code)
+		}
+	}
+}
+
 func TestAlarmAcknowledgementRejectsStaleRevisionBeforeMutation(t *testing.T) {
 	alarmService := &fakeAlarms{}
 	server := newSecuredTestServer(t, Dependencies{State: fakeState{revision: 2}, Alarms: alarmService})

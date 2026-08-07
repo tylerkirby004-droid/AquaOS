@@ -37,6 +37,7 @@ type Server struct {
 	dependencies     Dependencies
 	maximumBodyBytes int64
 	mutations        *rateLimiter
+	authentication   *rateLimiter
 	startedAt        time.Time
 }
 
@@ -62,7 +63,7 @@ func WithSecurity(authenticator Authenticator, authorizer Authorizer) Option {
 
 // New constructs an HTTP server from external configuration and dependencies.
 func New(cfg config.HTTP, manager *health.Manager, logger *slog.Logger, options ...Option) *Server {
-	s := &Server{health: manager, logger: logger, shutdownTimeout: cfg.WriteTimeout, authenticator: denyAuthenticator{}, authorizer: roleAuthorizer{}, maximumBodyBytes: cfg.MaximumRequestBytes, mutations: newRateLimiter(cfg.MutationRate, cfg.MutationBurst), startedAt: time.Now().UTC()}
+	s := &Server{health: manager, logger: logger, shutdownTimeout: cfg.WriteTimeout, authenticator: denyAuthenticator{}, authorizer: roleAuthorizer{}, maximumBodyBytes: cfg.MaximumRequestBytes, mutations: newRateLimiter(cfg.MutationRate, cfg.MutationBurst), authentication: newRateLimiter(cfg.MutationRate, cfg.MutationBurst), startedAt: time.Now().UTC()}
 	for _, option := range options {
 		option(s)
 	}

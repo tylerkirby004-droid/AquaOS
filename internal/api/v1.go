@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"runtime"
 	"runtime/debug"
@@ -173,6 +174,11 @@ func correlationIDFromContext(ctx context.Context) string {
 
 func (s *Server) authorized(role Role, mutation bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if !s.authentication.allow(remoteAddress(request), time.Now()) {
+			w.Header().Set("Retry-After", "1")
+			writeProblem(w, request, http.StatusTooManyRequests, "rate_limited", "Too many requests", "The authentication rate limit was exceeded.")
+			return
+		}
 		principal, err := s.authenticator.Authenticate(request)
 		if err != nil {
 			writeProblem(w, request, http.StatusUnauthorized, "authentication_required", "Authentication required", "Valid bearer credentials are required.")
@@ -189,6 +195,14 @@ func (s *Server) authorized(role Role, mutation bool, next http.Handler) http.Ha
 		}
 		next.ServeHTTP(w, request.WithContext(context.WithValue(request.Context(), principalKey{}, principal)))
 	})
+}
+
+func remoteAddress(request *http.Request) string {
+	host, _, err := net.SplitHostPort(request.RemoteAddr)
+	if err == nil {
+		return host
+	}
+	return request.RemoteAddr
 }
 
 func (s *Server) system(w http.ResponseWriter, request *http.Request) {

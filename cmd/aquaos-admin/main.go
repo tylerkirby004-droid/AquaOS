@@ -22,6 +22,10 @@ func run() int {
 	address := flag.String("address", "127.0.0.1:8090", "Admin GUI listen address")
 	tokenFile := flag.String("token-file", "", "bearer token file")
 	root := flag.String("root", "/", "managed Control VM root")
+	authenticationRate := flag.Int("authentication-rate", 5, "authentication attempts per second per client")
+	authenticationBurst := flag.Int("authentication-burst", 10, "authentication attempt burst per client")
+	mutationRate := flag.Int("mutation-rate", 2, "mutations per second per client")
+	mutationBurst := flag.Int("mutation-burst", 4, "mutation burst per client")
 	flag.Parse()
 	token, err := readToken(*tokenFile)
 	if err != nil {
@@ -39,7 +43,7 @@ func run() int {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	server, err := admin.New(admin.Config{Address: *address, Token: token, MaximumRequestBytes: 32 * 1024 * 1024, ShutdownTimeout: 10 * time.Second}, service, logger.With("component", "admin"))
+	server, err := admin.New(admin.Config{Address: *address, Token: token, MaximumRequestBytes: 32 * 1024 * 1024, ShutdownTimeout: 10 * time.Second, AuthenticationRate: *authenticationRate, AuthenticationBurst: *authenticationBurst, MutationRate: *mutationRate, MutationBurst: *mutationBurst}, service, logger.With("component", "admin"))
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		return 1
