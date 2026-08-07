@@ -48,7 +48,7 @@ service startup, tested backups/restores, and replacement-host recovery remain
 mandatory operational controls. AquaOS must never be installed directly on the
 Proxmox host.
 
-Home Assistant is the normal operational UI. The future AquaOS Admin GUI is for
+Home Assistant is the normal operational UI. The AquaOS Admin GUI is for
 installation, configuration, diagnostics, backup/restore, upgrades, rollback,
 and repair. It is non-authoritative: every mutation must pass through
 authenticated AquaOS APIs/application services and existing safety policy.
@@ -99,7 +99,7 @@ uses the simulator and rejecting output router. See
 evidence is required before Prompt 8 can be declared complete.
 
 Prompt 9 adds the authenticated, versioned REST boundary used by integrations
-and the future non-authoritative Admin GUI. See [docs/rest-api.md](docs/rest-api.md)
+and the non-authoritative Admin GUI. See [docs/rest-api.md](docs/rest-api.md)
 and [docs/openapi-v1.yaml](docs/openapi-v1.yaml).
 
 Prompt 10 adds optional Home Assistant MQTT Discovery and a narrow command
@@ -114,6 +114,12 @@ Prompt 12 adds the native Control VM operations service, headless `aquaosctl`,
 and separately launched embedded Admin GUI. See
 [docs/control-vm-installation.md](docs/control-vm-installation.md). Physical
 clean-VM and cross-server acceptance evidence remains required.
+
+Prompts 13–16 add security gates, frozen v1 contracts, a traceable acceptance
+checklist, the removable `aquaos-vision` scaffold, and reproducible candidate
+packaging. AquaOS is still not v1.0: physical and 72-hour evidence remains
+release-blocking. See [docs/easy-test.md](docs/easy-test.md) for the shortest
+safe evaluation path.
 
 ## Safe development startup
 

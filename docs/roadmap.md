@@ -30,7 +30,9 @@ criteria. Work proceeds in order and stops when a required gate lacks evidence.
 11. v0.9 Release candidate — scoped hardening and security gates are
     implemented; compatibility is frozen and the acceptance harness exists.
     Physical matrix evidence and the 72-hour soak remain release-blocking.
-12. v1.0 Stable — approved release evidence, artifacts, and compatibility.
+12. v1.0 Stable — candidate packaging, policies, and draft notes are ready.
+    Approval, archived evidence, and the v1.0 tag remain blocked by the release
+    checklist.
 
 Optional Python AI work is Prompt 15 and may not be introduced earlier or
 become necessary for critical operation.
