@@ -1,7 +1,80 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AquaOS Admin</title><link rel="stylesheet" href="style.css"></head>
-<body><main><header><p class="eyebrow">AquaOS Control VM</p><h1>Recovery-safe administration</h1><p>This interface is non-authoritative. Every action invokes the same validated operations services as <code>aquaosctl</code>.</p></header>
-<section><h2>Authentication</h2><label>Bearer token <input id="token" type="password" autocomplete="current-password"></label><button id="connect">Connect</button><output id="connection">Not connected</output></section>
-<section><h2>Deployment</h2><div class="actions"><button data-action="status">Status</button><button data-action="verify">Verify</button><button data-action="repair">Repair dry run</button><button data-action="rollback">Rollback dry run</button><button data-action="backup">Download backup</button></div><pre id="result">No operation selected.</pre></section>
-<section><h2>Core configuration and inventory</h2><p>Edit a complete candidate containing inventory mappings, adapter endpoints, and safety settings. Validation and activation run through the operations service; the browser never writes files.</p><textarea id="candidate" rows="12" placeholder="schema_version: 1"></textarea><div class="actions"><button id="validate">Validate candidate</button><button id="apply">Apply candidate</button></div></section>
-<aside><strong>Safety boundary:</strong> Do not run this service on the Proxmox host. Keep headless CLI recovery available and retain independent physical equipment safeguards.</aside></main><script src="app.js"></script></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AquaOS Setup</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div><span class="brand-mark">A</span><strong>AquaOS</strong><span class="subtle">Administration</span></div>
+    <span id="connection" class="status disconnected">Not connected</span>
+  </header>
+  <div class="shell">
+    <nav aria-label="Administration sections">
+      <button class="nav-item active" data-view="welcome">1. Welcome</button>
+      <button class="nav-item" data-view="system">2. System check</button>
+      <button class="nav-item" data-view="integrations">3. Services</button>
+      <button class="nav-item" data-view="inventory">4. Equipment & sensors</button>
+      <button class="nav-item" data-view="safety">5. Safety review</button>
+      <button class="nav-item" data-view="maintenance">Maintenance</button>
+    </nav>
+    <main>
+      <section id="welcome" class="view active">
+        <p class="eyebrow">Guided setup</p>
+        <h1>Let’s set up your aquarium</h1>
+        <p class="lede">This assistant uses plain-language choices and checks every change before AquaOS accepts it. Nothing on this page directly switches physical equipment.</p>
+        <div class="card warning"><strong>Before continuing</strong><p>Keep heaters, dosing pumps, and top-off equipment disconnected or connected only to a safe test load until the commissioning checks pass.</p></div>
+        <label for="token">Administrator access code</label>
+        <div class="inline"><input id="token" type="password" autocomplete="current-password" placeholder="Paste the code from the Control VM"><button id="connect" class="primary">Connect safely</button></div>
+        <p class="help">The code stays in this browser tab and is not saved.</p>
+      </section>
+
+      <section id="system" class="view">
+        <p class="eyebrow">Step 2</p><h1>Check the Control VM</h1>
+        <p>All four checks should pass before configuring real equipment.</p>
+        <div id="checks" class="check-grid"><p class="empty">Connect first, then choose “Run all checks.”</p></div>
+        <button id="verify" class="primary">Run all checks</button>
+      </section>
+
+      <section id="integrations" class="view">
+        <p class="eyebrow">Step 3</p><h1>Optional services</h1>
+        <p>AquaOS keeps controlling locally if these services stop.</p>
+        <div class="card"><label class="switch"><input id="mqttEnabled" type="checkbox"><span>Connect Home Assistant and MQTT</span></label><div class="fields"><label>Site name<input id="siteId" placeholder="home-reef"></label><label>MQTT address<input id="broker" placeholder="ssl://aquaos-services:8883"></label><label>Client name<input id="clientId" placeholder="aquaos"></label></div></div>
+        <div class="card"><label class="switch"><input id="influxEnabled" type="checkbox"><span>Store history in InfluxDB</span></label><div class="fields"><label>InfluxDB address<input id="influxUrl" placeholder="http://aquaos-services:8086"></label><label>Organization<input id="influxOrg"></label><label>Bucket<input id="influxBucket" placeholder="aquaos"></label><label>Token file on Control VM<input id="influxToken" placeholder="/etc/aquaos/secrets/influxdb.token"></label></div></div>
+        <button id="saveServices" class="primary">Check these settings</button>
+      </section>
+
+      <section id="inventory" class="view">
+        <p class="eyebrow">Step 4</p><h1>Your equipment and sensors</h1>
+        <p>Add clear names here. Physical network endpoints are commissioned separately and remain disabled until safety review.</p>
+        <div class="split">
+          <form id="deviceForm" class="card"><h2>Add a device</h2><label>Short ID<input id="deviceId" required pattern="[a-z][a-z0-9-]{0,62}" placeholder="fish-room-node"></label><button>Add device</button></form>
+          <form id="sensorForm" class="card"><h2>Add a sensor</h2><label>Short ID<input id="sensorId" required placeholder="display-tank-temperature"></label><label>Connected device<select id="sensorDevice"></select></label><label>Measurement<select id="sensorUnit"><option value="celsius">Temperature — °C</option><option value="fahrenheit">Temperature — °F</option><option value="pH">pH</option><option value="ppt">Salinity — ppt</option><option value="liters_per_hour">Flow — L/h</option><option value="boolean">On/off or leak</option></select></label><button>Add sensor</button></form>
+          <form id="equipmentForm" class="card"><h2>Add equipment</h2><label>Short ID<input id="equipmentId" required placeholder="return-pump"></label><label>Connected device<select id="equipmentDevice"></select></label><button>Add equipment</button></form>
+        </div>
+        <div id="inventoryList" class="card"><p class="empty">No inventory loaded.</p></div>
+        <button id="checkInventory" class="primary">Check inventory</button>
+      </section>
+
+      <section id="safety" class="view">
+        <p class="eyebrow">Step 5</p><h1>Review before applying</h1>
+        <div class="card warning"><strong>Physical outputs remain a separate commissioning step.</strong><p>Configuration validation does not prove safe wiring, relay ratings, independent heater cutoffs, or correct outlet assignment.</p></div>
+        <label class="confirm"><input id="understand" type="checkbox"> I understand this configuration must be bench-tested before controlling aquarium equipment.</label>
+        <div class="actions"><button id="validate" class="primary">Validate complete setup</button><button id="apply" class="danger" disabled>Apply validated setup</button></div>
+        <details><summary>Advanced: configuration preview</summary><textarea id="candidate" rows="18" spellcheck="false"></textarea></details>
+      </section>
+
+      <section id="maintenance" class="view">
+        <p class="eyebrow">Recovery tools</p><h1>Maintenance</h1>
+        <p>These tools never replace a tested backup or independent equipment safeguards.</p>
+        <div class="actions"><button data-action="status">Deployment status</button><button data-action="repair">Preview repair</button><button data-action="rollback">Preview rollback</button><button data-action="backup">Download backup</button></div>
+        <pre id="result">No operation selected.</pre>
+      </section>
+      <div id="notice" role="status" aria-live="polite"></div>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

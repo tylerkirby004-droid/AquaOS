@@ -21,8 +21,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tylerkirby004-droid/aquaos/internal/config"
 	"github.com/tylerkirby004-droid/aquaos/internal/health"
 	"github.com/tylerkirby004-droid/aquaos/internal/operations"
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed web/*
@@ -31,6 +33,7 @@ var assets embed.FS
 // Operations is the Admin GUI-owned application-service contract.
 type Operations interface {
 	GetStatus(context.Context, operations.Actor) (operations.Status, error)
+	GetConfiguration(context.Context, operations.Actor) (config.Config, error)
 	Verify(context.Context, operations.Actor) (operations.Diagnostics, error)
 	Repair(context.Context, operations.Actor, bool) (operations.Result, error)
 	Install(context.Context, operations.InstallRequest) (operations.Result, error)
@@ -88,6 +91,9 @@ func New(cfg Config, service Operations, logger *slog.Logger) (*Server, error) {
 	mux.HandleFunc("GET /health/live", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, map[string]string{"status": "alive"}) })
 	mux.Handle("GET /admin/", http.StripPrefix("/admin/", http.FileServer(http.FS(web))))
 	mux.Handle("GET /api/status", result.authorize(http.HandlerFunc(result.status)))
+	mux.Handle("GET /api/config", result.authorize(http.HandlerFunc(result.configuration)))
+	mux.Handle("POST /api/config/editable/validate", result.authorize(http.HandlerFunc(result.validateEditableConfiguration)))
+	mux.Handle("POST /api/config/editable/apply", result.authorize(http.HandlerFunc(result.applyEditableConfiguration)))
 	mux.Handle("POST /api/verify", result.authorize(http.HandlerFunc(result.verify)))
 	mux.Handle("POST /api/repair", result.authorize(http.HandlerFunc(result.repair)))
 	mux.Handle("POST /api/install", result.authorize(http.HandlerFunc(result.install)))
@@ -227,6 +233,49 @@ func actor() operations.Actor { return operations.Actor{ID: "admin-gui", Adminis
 func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	value, err := s.operations.GetStatus(r.Context(), actor())
 	s.respond(w, value, err)
+}
+func (s *Server) configuration(w http.ResponseWriter, r *http.Request) {
+	value, err := s.operations.GetConfiguration(r.Context(), actor())
+	if err != nil {
+		s.operationFailed(w, err)
+		return
+	}
+	s.respond(w, editableConfiguration{Configuration: value, HTTPBearerTokenFile: value.HTTP.BearerTokenFile, InfluxDBTokenFile: value.Storage.InfluxDB.TokenFile}, nil)
+}
+
+type editableConfiguration struct {
+	Configuration       config.Config `json:"configuration"`
+	HTTPBearerTokenFile string        `json:"httpBearerTokenFile"`
+	InfluxDBTokenFile   string        `json:"influxdbTokenFile"`
+}
+
+func (s *Server) validateEditableConfiguration(w http.ResponseWriter, r *http.Request) {
+	s.processEditableConfiguration(w, r, false)
+}
+
+func (s *Server) applyEditableConfiguration(w http.ResponseWriter, r *http.Request) {
+	s.processEditableConfiguration(w, r, true)
+}
+
+func (s *Server) processEditableConfiguration(w http.ResponseWriter, r *http.Request, apply bool) {
+	var request editableConfiguration
+	if !s.decode(w, r, &request) {
+		return
+	}
+	request.Configuration.HTTP.BearerTokenFile = request.HTTPBearerTokenFile
+	request.Configuration.Storage.InfluxDB.TokenFile = request.InfluxDBTokenFile
+	payload, err := yaml.Marshal(request.Configuration)
+	if err != nil {
+		writeProblem(w, http.StatusBadRequest, "invalid_configuration", "Configuration could not be encoded.")
+		return
+	}
+	if apply {
+		value, operationErr := s.operations.ApplyConfiguration(r.Context(), actor(), payload, false)
+		s.respond(w, value, operationErr)
+		return
+	}
+	value, operationErr := s.operations.ValidateConfiguration(r.Context(), actor(), payload)
+	s.respond(w, value, operationErr)
 }
 func (s *Server) verify(w http.ResponseWriter, r *http.Request) {
 	value, err := s.operations.Verify(r.Context(), actor())

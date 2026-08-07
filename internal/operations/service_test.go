@@ -81,6 +81,18 @@ func newService(t *testing.T, host Host) *Service {
 
 var administrator = Actor{ID: "root-test", Administrator: true}
 
+func TestGetConfigurationReturnsValidatedSnapshot(t *testing.T) {
+	host := newFakeHost()
+	host.files[configPath] = []byte("schema_version: 1\nhttp:\n  bearer_token_file: /etc/aquaos/secrets/api.token\n")
+	value, err := newService(t, host).GetConfiguration(context.Background(), administrator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value.SchemaVersion != config.CurrentSchemaVersion || value.HTTP.BearerTokenFile != "/etc/aquaos/secrets/api.token" {
+		t.Fatalf("configuration = %+v", value)
+	}
+}
+
 func signInstall(t *testing.T, request InstallRequest) InstallRequest {
 	t.Helper()
 	public, private, err := ed25519.GenerateKey(rand.Reader)

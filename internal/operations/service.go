@@ -214,6 +214,26 @@ func (s *Service) GetStatus(ctx context.Context, actor Actor) (Status, error) {
 	return Status{Installed: binary, Version: strings.TrimSpace(string(version)), Configured: configured, ServiceUnit: unit, Platform: s.host.GOOS() + "/" + s.host.GOARCH()}, nil
 }
 
+// GetConfiguration returns the validated, redacted active configuration for
+// guided administrative editing. Secret values are never returned.
+func (s *Service) GetConfiguration(ctx context.Context, actor Actor) (config.Config, error) {
+	if err := authorize(actor); err != nil {
+		return config.Config{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return config.Config{}, err
+	}
+	payload, err := s.host.ReadFile(configPath)
+	if err != nil {
+		return config.Config{}, fmt.Errorf("read active configuration: %w", err)
+	}
+	value, err := config.DecodeCandidate(payload)
+	if err != nil {
+		return config.Config{}, fmt.Errorf("decode active configuration: %w", err)
+	}
+	return value.Redacted(), nil
+}
+
 // Verify validates platform, managed files, configuration, and service unit.
 func (s *Service) Verify(ctx context.Context, actor Actor) (Diagnostics, error) {
 	status, err := s.GetStatus(ctx, actor)

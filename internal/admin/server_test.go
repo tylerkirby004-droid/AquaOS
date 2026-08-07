@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tylerkirby004-droid/aquaos/internal/config"
 	"github.com/tylerkirby004-droid/aquaos/internal/operations"
 )
 
@@ -21,6 +23,9 @@ type fakeOperations struct {
 
 func (f *fakeOperations) GetStatus(context.Context, operations.Actor) (operations.Status, error) {
 	return operations.Status{Installed: true, Version: "test"}, f.statusErr
+}
+func (*fakeOperations) GetConfiguration(context.Context, operations.Actor) (config.Config, error) {
+	return config.Defaults(), nil
 }
 func (*fakeOperations) Verify(context.Context, operations.Actor) (operations.Diagnostics, error) {
 	return operations.Diagnostics{}, nil
@@ -58,7 +63,7 @@ func (*fakeOperations) ApplyConfiguration(context.Context, operations.Actor, []b
 }
 func newTestServer(t *testing.T, service Operations) *Server {
 	t.Helper()
-	server, err := New(Config{Address: "127.0.0.1:0", Token: "test-token-with-at-least-32-characters", MaximumRequestBytes: 1024, ShutdownTimeout: time.Second, AuthenticationRate: 100, AuthenticationBurst: 100, MutationRate: 100, MutationBurst: 100}, service, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	server, err := New(Config{Address: "127.0.0.1:0", Token: "test-token-with-at-least-32-characters", MaximumRequestBytes: 64 * 1024, ShutdownTimeout: time.Second, AuthenticationRate: 100, AuthenticationBurst: 100, MutationRate: 100, MutationBurst: 100}, service, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,13 +92,43 @@ func TestEmbeddedAdminUIIsAvailableWithoutNodeBuild(t *testing.T) {
 	server := newTestServer(t, &fakeOperations{})
 	response := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/", nil))
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "Recovery-safe administration") {
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "Let’s set up your aquarium") {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestAdminReturnsRedactedConfigurationThroughApplicationService(t *testing.T) {
+	server := newTestServer(t, &fakeOperations{})
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/config", nil)
+	request.Header.Set("Authorization", "Bearer test-token-with-at-least-32-characters")
+	response := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"schemaVersion":1`) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestAdminValidatesStructuredConfigurationThroughApplicationService(t *testing.T) {
+	server := newTestServer(t, &fakeOperations{})
+	payload, err := json.Marshal(editableConfiguration{Configuration: config.Defaults()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded editableConfiguration
+	if err = json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/config/editable/validate", strings.NewReader(string(payload)))
+	request.Header.Set("Authorization", "Bearer test-token-with-at-least-32-characters")
+	response := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 }
 func TestRestorePayloadIsBounded(t *testing.T) {
 	server := newTestServer(t, &fakeOperations{})
-	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/restore", strings.NewReader(strings.Repeat("x", 1025)))
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/restore", strings.NewReader(strings.Repeat("x", 64*1024+1)))
 	request.Header.Set("Authorization", "Bearer test-token-with-at-least-32-characters")
 	response := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(response, request)

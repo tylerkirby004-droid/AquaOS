@@ -42,6 +42,21 @@ sudo /opt/aquaos/bin/aquaos-admin \
   -mutation-rate 2 -mutation-burst 4
 ```
 
+Open the displayed `/admin/` address through the documented SSH tunnel and
+enter the administrator access code. The guided interface loads the active
+configuration through the operations application service and walks through:
+
+1. Control VM verification.
+2. Optional MQTT/Home Assistant and InfluxDB settings.
+3. Generic device, sensor, and equipment inventory.
+4. Complete candidate validation and a required bench-safety acknowledgement.
+5. Application through the same atomic configuration path as `aquaosctl`.
+
+The advanced configuration preview is diagnostic only. The browser never
+writes AquaOS files directly and never switches physical equipment. Adapter
+endpoint commissioning and user-defined alarm-policy editing remain separate
+release gates until their typed configuration and safety services are complete.
+
 Use an SSH tunnel for remote browser access. Do not expose this recovery
 listener broadly on the LAN. Rate limits are external flags so operators can
 tighten them for their management path; both client maps are bounded. Prompt 13
