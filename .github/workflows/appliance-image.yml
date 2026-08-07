@@ -6,6 +6,9 @@ on:
     branches: [main]
     paths:
       - .github/workflows/appliance-image.yml
+      - scripts/build-appliance-image.sh
+      - scripts/build-signed-release.sh
+      - packaging/appliance-image/**
 
 permissions:
   contents: read
@@ -48,9 +51,10 @@ jobs:
           image=$(find dist/image -maxdepth 1 -type f -name '*.iso' -print -quit)
           test -n "$image"
           digest=$(sha256sum "$image" | awk '{print $1}')
-          printf '%s' "$digest" \
-            | openssl pkeyutl -sign -rawin -inkey dist/signing/development-private.pem \
-            > "$image.sig"
+          printf '%s' "$digest" > dist/image/iso.digest-input
+          openssl pkeyutl -sign -rawin -inkey dist/signing/development-private.pem \
+            -in dist/image/iso.digest-input -out "$image.sig"
+          rm -f dist/image/iso.digest-input
           od -An -vtx1 "$image.sig" | tr -d ' \n' > "$image.sig.hex"
           cp dist/signing/development-public.hex dist/image/aquaos-development-public-key.hex
           printf '%s\n' \
