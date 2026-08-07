@@ -1,9 +1,10 @@
 # Docker service stack
 
-This Compose project is intended for a separate optional-services Docker guest,
-not the Proxmox host or AquaOS Control VM. It runs Mosquitto, InfluxDB, and
-Grafana. Core writes directly to InfluxDB; the obsolete Reef-Pi Telegraf bridge
-and publisher are not started.
+This Compose project supplies noncritical services on the dedicated AquaOS
+appliance. The standard installer starts Mosquitto and Home Assistant. The
+`--advanced-history` profile additionally starts InfluxDB and Grafana. AquaOS
+Core runs natively under systemd and continues when this entire stack is down.
+The obsolete Reef-Pi Telegraf bridge and publisher are not started.
 
 Service images are pinned to a major or minor release line so a routine pull
 cannot silently cross a breaking major-version boundary. Review release notes,

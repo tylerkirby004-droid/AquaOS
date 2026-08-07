@@ -1,6 +1,6 @@
 # ADR-022: Support a dedicated Debian appliance profile
 
-- Status: Accepted by project owner
+- Status: Superseded by ADR-023
 - Date: 2026-08-07
 
 ## Context

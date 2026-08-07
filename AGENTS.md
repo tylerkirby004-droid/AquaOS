@@ -4,16 +4,11 @@ The governing specification is `docs/AquaOS_Development_Bible_Edition_1.2.docx`.
 Prompts 1–7 predate its post-Prompt-7 deployment pivot and must not be rewritten
 solely because the production host changed.
 
-AquaOS Core's primary production target is Linux amd64 in a dedicated minimal
-AquaOS Control VM on Proxmox, running natively under systemd. Never install
-AquaOS directly on the Proxmox host or make Docker part of the critical control
-path.
-
-ADR-022 additionally authorizes a dedicated single-purpose Debian amd64
-appliance as the default guided installation. Core must still run natively under
-systemd with priority over resource-limited optional containers. Do not install
-the appliance profile on a shared desktop/server. Proxmox remains the advanced
-strong-isolation profile.
+AquaOS Core's sole supported production target is Linux amd64 on a dedicated,
+single-purpose Debian appliance, running natively under systemd. ADR-023
+supersedes the earlier Proxmox deployment choices. Never install AquaOS on a
+shared desktop, NAS, general Docker host, or hypervisor host, and never make
+Docker part of the critical control path.
 
 The Raspberry Pi 4B is an optional display/kiosk only. Its failure, and failure
 of MQTT, Home Assistant, InfluxDB, Grafana, Node-RED, AI, Internet access, or any
@@ -23,9 +18,10 @@ Home Assistant is the daily operational UI. The separate AquaOS Admin GUI is
 non-authoritative: every mutation must use authenticated AquaOS APIs/application
 services and existing validation and safety policy.
 
-Do not obscure the Proxmox host failure domain. Production guidance must include
-independent physical equipment safeguards, UPS planning, automatic VM/service
-startup, tested backups/restores, and replacement-host recovery.
+Do not obscure the dedicated appliance's physical failure domain. Production
+guidance must include independent physical equipment safeguards, UPS planning,
+automatic service startup, tested off-host backups/restores, and replacement-
+machine recovery.
 
 Never sacrifice reliability for convenience.
 

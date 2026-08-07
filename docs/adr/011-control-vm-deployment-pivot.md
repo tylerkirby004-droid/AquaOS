@@ -1,6 +1,6 @@
 # ADR-011: Move the production controller to a dedicated Control VM
 
-- Status: Accepted
+- Status: Superseded by ADR-023
 - Date: 2026-08-06
 - Decision owners: AquaOS maintainers
 - Governing specification: AquaOS Development Bible, Edition 1.2

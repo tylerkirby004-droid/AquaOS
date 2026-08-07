@@ -1,31 +1,19 @@
 # Hardware plan
 
-## Current platform roles
+The supported controller is one dedicated x86-64 computer running Debian
+stable. A small business-class mini PC with wired Ethernet, 4 CPU threads,
+8 GB RAM, and a 128 GB SSD is sufficient for the standard profile. Use at least
+16 GB RAM and a 512 GB endurance SSD for `--advanced-history`.
 
-| Component | Role | Notes |
-| --- | --- | --- |
-| Dedicated Linux amd64 VM | AquaOS Control VM | Native systemd Core; bridged LAN; automatic Proxmox startup |
-| Raspberry Pi 4B | Optional display/kiosk | Home Assistant, Grafana, and AquaOS status only; zero control authority |
-| Raspberry Pi 3B | Legacy/compatibility reserve | Reserve for Reef-Pi research only |
-| Robo-Tank hardware | Relay/PWM and sensor interface | Document channel mapping before deployment |
-| Intel i7-6700 / 64 GB | Physical Proxmox host | Host failure stops Core; never install AquaOS directly here |
-| AMD RX 6700 | AI evaluation | NVIDIA remains preferred for broad local-model compatibility |
+The controller, Ethernet/PoE switch, router, and critical LAN devices should be
+covered by a correctly sized UPS. Reserve the controller's address in DHCP and
+keep encrypted backups on a different physical machine or removable medium.
 
-## Storage
+Record the controller model, storage health, Debian version, network address,
+UPS runtime, device firmware, wiring, backup destination, and replacement
+procedure. A spare computer capable of restoring the latest backup materially
+reduces recovery time.
 
-Use the existing 500 GB SSD for Proxmox and add a 2 TB NVMe drive for VM disks,
-time-series data, and models. AquaOS configuration and Control VM backups must
-also be copied to a separate physical target, with restore proven on replacement
-hardware. Plan appropriate UPS protection for the host, router, switch, and
-wireless access point.
-
-## Required inventory before live control
-
-- Control VM hostname and reserved/static address
-- Proxmox and systemd automatic-start behavior, shutdown ordering, and recovery runbook
-- Tested configuration backup, VM backup, restore, and replacement-host procedure
-- Relay/PWM channel, equipment, normal state, maximum on-time, and local fallback
-- Sensor type, calibration procedure, units, and sampling interval
-- Power and GFCI/protection topology
-- Independent physical safety devices for hazardous equipment
-- Optional MQTT broker credentials and TLS policy, when MQTT is enabled
+Independent heater thermostats, overflow/ATO limits, appropriate GFCI/RCD and
+grounding, and safe equipment defaults are mandatory. The dedicated appliance
+is still one failure domain and must not be the only barrier against harm.

@@ -29,7 +29,7 @@
         <p class="lede">This assistant uses plain-language choices and checks every change before AquaOS accepts it. Nothing on this page directly switches physical equipment.</p>
         <div class="card warning"><strong>Before continuing</strong><p>Keep heaters, dosing pumps, and top-off equipment disconnected or connected only to a safe test load until the commissioning checks pass.</p></div>
         <label for="token">Administrator access code</label>
-        <div class="inline"><input id="token" type="password" autocomplete="current-password" placeholder="Paste the code from the Control VM"><button id="connect" class="primary">Connect safely</button></div>
+        <div class="inline"><input id="token" type="password" autocomplete="current-password" placeholder="Paste the code from the AquaOS appliance"><button id="connect" class="primary">Connect safely</button></div>
         <p class="help">The code comes from the dedicated AquaOS control host, stays in this browser tab, and is not saved.</p>
       </section>
 
@@ -45,7 +45,7 @@
         <p class="eyebrow">Step 3</p><h1>Optional services</h1>
         <p>AquaOS keeps controlling locally if these services stop.</p>
         <div class="card"><label class="switch"><input id="mqttEnabled" type="checkbox"><span>Connect Home Assistant and MQTT</span></label><div class="fields"><label>Site name<input id="siteId" placeholder="home-reef"></label><label>MQTT address<input id="broker" placeholder="ssl://aquaos-services:8883"></label><label>Client name<input id="clientId" placeholder="aquaos"></label></div></div>
-        <div class="card"><label class="switch"><input id="influxEnabled" type="checkbox"><span>Store history in InfluxDB</span></label><div class="fields"><label>InfluxDB address<input id="influxUrl" placeholder="http://aquaos-services:8086"></label><label>Organization<input id="influxOrg"></label><label>Bucket<input id="influxBucket" placeholder="aquaos"></label><label>Token file on Control VM<input id="influxToken" placeholder="/etc/aquaos/secrets/influxdb.token"></label></div></div>
+        <div class="card"><label class="switch"><input id="influxEnabled" type="checkbox"><span>Store history in InfluxDB</span></label><div class="fields"><label>InfluxDB address<input id="influxUrl" placeholder="http://aquaos-services:8086"></label><label>Organization<input id="influxOrg"></label><label>Bucket<input id="influxBucket" placeholder="aquaos"></label><label>Token file on appliance<input id="influxToken" placeholder="/etc/aquaos/secrets/influxdb.token"></label></div></div>
         <button id="saveServices" class="primary">Check these settings</button>
       </section>
 

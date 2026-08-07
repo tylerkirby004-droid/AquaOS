@@ -11,9 +11,11 @@ import (
 // Dashboard renders a dependency-free Home Assistant YAML dashboard whose
 // entity IDs match AquaOS MQTT Discovery's explicit object IDs.
 func Dashboard(cfg config.Config, grafanaURL string) ([]byte, error) {
-	parsed, err := url.Parse(grafanaURL)
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-		return nil, fmt.Errorf("grafana URL must be an HTTP or HTTPS URL")
+	if grafanaURL != "" {
+		parsed, err := url.Parse(grafanaURL)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+			return nil, fmt.Errorf("grafana URL must be an HTTP or HTTPS URL")
+		}
 	}
 	var output strings.Builder
 	output.WriteString("title: AquaOS\nviews:\n  - title: Overview\n    path: aquaos\n    icon: mdi:fishbowl\n    cards:\n")
@@ -28,9 +30,20 @@ func Dashboard(cfg config.Config, grafanaURL string) ([]byte, error) {
 		equipment = append(equipment, "switch."+entityObjectID("equipment", item.EntityID))
 	}
 	writeEntitiesCard(&output, "Equipment — commands remain safety checked", equipment)
-	output.WriteString("      - type: iframe\n        title: Historical trends\n        url: \"")
-	output.WriteString(strings.ReplaceAll(grafanaURL, "\"", "%22"))
-	output.WriteString("/d/aquaos-overview/aquaos-overview?kiosk\"\n        aspect_ratio: 70%\n")
+	trendEntities := append(append([]string(nil), sensors...), equipment...)
+	if len(trendEntities) > 0 {
+		output.WriteString("      - type: history-graph\n        title: 24-hour sensor and equipment trends\n        hours_to_show: 24\n        entities:\n")
+		for _, entity := range trendEntities {
+			output.WriteString("          - ")
+			output.WriteString(entity)
+			output.WriteByte('\n')
+		}
+	}
+	if grafanaURL != "" {
+		output.WriteString("      - type: iframe\n        title: Advanced historical analysis\n        url: \"")
+		output.WriteString(strings.ReplaceAll(grafanaURL, "\"", "%22"))
+		output.WriteString("/d/aquaos-overview/aquaos-overview?kiosk\"\n        aspect_ratio: 70%\n")
+	}
 	return []byte(output.String()), nil
 }
 

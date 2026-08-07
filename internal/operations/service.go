@@ -92,7 +92,7 @@ type ConfigurationResult struct {
 	RolledBack      bool   `json:"rolledBack,omitempty"`
 }
 
-// Service owns authorized, exact-path Control VM operations.
+// Service owns authorized, exact-path dedicated-appliance operations.
 type Service struct {
 	host   Host
 	logger *slog.Logger
@@ -121,7 +121,7 @@ func (s *Service) preflight(ack bool) error {
 		return fmt.Errorf("unsupported production platform %s/%s; require linux/amd64", s.host.GOOS(), s.host.GOARCH())
 	}
 	if exists, _ := s.host.Exists("/etc/pve"); exists {
-		return errors.New("refusing to install on a Proxmox host")
+		return errors.New("refusing to install on a hypervisor host")
 	}
 	return nil
 }

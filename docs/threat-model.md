@@ -14,7 +14,7 @@ blocks release unless this document names an owner and an explicit remediation.
 | Supply-chain compromise | minimal modules, vulnerability/license/static/secret CI gates, signed upgrade artifacts | CI and operations signature tests | Release/mitigated |
 | Disk/archive exhaustion | request limits, strict backup entry allowlist, checksums, bounded telemetry queues | API/operations/storage tests | Operations/mitigated |
 | Denial of service | server timeouts, header/body bounds, bounded token maps, bounded queues | API and subsystem tests | Core/mitigated |
-| Control VM or Proxmox host loss | UPS/startup/restore planning plus independent physical equipment safeguards | physical recovery evidence | Operations/**release-blocking evidence pending** |
+| Dedicated appliance loss | UPS/startup/restore planning plus independent physical equipment safeguards | physical recovery evidence | Operations/**release-blocking evidence pending** |
 
 Accepted residual risks are limited to the explicitly documented single-host
 failure domain and bearer-token administration on a trusted management path.

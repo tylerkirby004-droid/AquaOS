@@ -2,7 +2,7 @@
 
 The easiest complete AquaOS installation uses a dedicated x86-64 computer with
 current Debian stable. It is not suitable for a shared desktop, NAS, Docker
-host, or Proxmox host. The machine remains one physical failure domain.
+host, or hypervisor host. The machine remains one physical failure domain.
 
 ## What the installer provides
 
@@ -10,7 +10,9 @@ host, or Proxmox host. The machine remains one physical failure domain.
 - TLS-protected AquaOS Admin GUI on the operator-selected LAN address.
 - Home Assistant Container with a generated AquaOS dashboard.
 - Local Home Assistant persistent notifications for active AquaOS alarms.
-- Mosquitto, InfluxDB, and provisioned Grafana dashboards.
+- Mosquitto and Home Assistant's built-in history in the standard profile.
+- Optional InfluxDB and provisioned Grafana dashboards with
+  `--advanced-history`.
 - Automatic dashboard regeneration after accepted AquaOS configuration changes.
 - Root-only generated credentials and resource priority favoring Core.
 
@@ -46,7 +48,8 @@ The installer does not activate Shelly or ESP32 adapters. When it finishes:
 
 Home Assistant automatically receives stable entities. The AquaOS sidebar
 dashboard displays Core/alarm state, validated sensors, equipment switches, and
-the provisioned Grafana history view. Every switch request still traverses the
+AquaOS history. The advanced profile also displays the provisioned Grafana
+history view. Every switch request still traverses the
 AquaOS command and safety pipeline. Home Assistant persistent notifications are
 noncritical and may be extended in Home Assistant with its mobile, email, or
 webhook notification actions.

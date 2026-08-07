@@ -16,4 +16,4 @@ Stable bounded tags include entity identity, quantity, canonical unit, event typ
 Example Grafana provisioning is under
 `infrastructure/docker/grafana/provisioning`. It expects the separate services
 stack's InfluxDB datasource configured through environment variables. These
-assets are not installed in the Control VM critical path.
+assets are not installed in the dedicated-appliance critical path.

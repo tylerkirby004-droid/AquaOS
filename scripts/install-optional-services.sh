@@ -3,6 +3,7 @@ set -eu
 
 source_dir=${1:-}
 site_id=${2:-}
+profile=${3:-standard}
 target_dir=/opt/aquaos-services
 credentials=/root/aquaos-services-credentials.txt
 
@@ -15,6 +16,10 @@ if [ -z "$source_dir" ] || [ -z "$site_id" ] || [ ! -f "$source_dir/compose.yaml
   exit 1
 fi
 case "$site_id" in *[!a-z0-9-]*|'') echo "site ID must contain lowercase letters, digits, and hyphens" >&2; exit 1;; esac
+if [ "$profile" != standard ] && [ "$profile" != advanced-history ]; then
+  echo "profile must be standard or advanced-history" >&2
+  exit 1
+fi
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
@@ -65,6 +70,10 @@ compose() {
   if docker compose version >/dev/null 2>&1; then docker compose "$@"; else docker-compose "$@"; fi
 }
 compose config --quiet
-compose up -d mosquitto influxdb grafana
+if [ "$profile" = advanced-history ]; then
+  compose up -d mosquitto influxdb grafana
+else
+  compose up -d mosquitto
+fi
 compose ps
 echo "Optional services installed. Root-only credentials: $credentials"

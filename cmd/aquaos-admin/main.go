@@ -30,7 +30,7 @@ func run() int {
 	tlsKey := flag.String("tls-key", "", "TLS private-key PEM file")
 	coreURL := flag.String("core-url", "http://localhost:8080", "local AquaOS Core API base URL")
 	coreTokenFile := flag.String("core-token-file", "", "AquaOS Core API token file")
-	root := flag.String("root", "/", "managed Control VM root")
+	root := flag.String("root", "/", "managed dedicated-appliance root")
 	authenticationRate := flag.Int("authentication-rate", 5, "authentication attempts per second per client")
 	authenticationBurst := flag.Int("authentication-burst", 10, "authentication attempt burst per client")
 	mutationRate := flag.Int("mutation-rate", 2, "mutations per second per client")

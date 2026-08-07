@@ -1,9 +1,9 @@
 # AquaOS
 
 AquaOS is a local-first, safety-first reef aquarium control platform. AquaOS
-Core is an authoritative Go process whose primary production target is a
-dedicated minimal Linux amd64 AquaOS Control VM on Proxmox, running natively
-under systemd. It will validate sensor data, apply deterministic safety
+Core is an authoritative Go process whose supported production target is a
+dedicated Linux amd64 Debian appliance, running natively under systemd. It will
+validate sensor data, apply deterministic safety
 policy, manage equipment state machines, issue commands through local hardware
 adapters, reconcile reported state, raise alarms, and expose local APIs.
 
@@ -23,7 +23,7 @@ The older Edition 1.1 file remains only as historical context for Prompts 1–7.
 Shelly / Ethernet-PoE ESP32 devices on the local LAN
                          |
                          v
-       AquaOS Core in dedicated Control VM <----> local API
+       AquaOS Core on dedicated appliance <----> local API
                          |
                          +---- optional MQTT ---- Home Assistant / integrations
                          +---- optional storage - InfluxDB / Grafana
@@ -40,13 +40,12 @@ Core. Optional storage, dashboards, remote servers, Internet access, and AI are
 outside the critical control path. Reef-Pi is reserved for possible future
 compatibility and is not the baseline hardware authority.
 
-Docker is supported only for noncritical development and integration work; it
-is not a production dependency for AquaOS Core. The display Pi is likewise
-noncritical. A physical Proxmox-host failure does stop the Control VM, so
-independent equipment safeguards, appropriate UPS coverage, automatic VM and
-service startup, tested backups/restores, and replacement-host recovery remain
-mandatory operational controls. AquaOS must never be installed directly on the
-Proxmox host.
+Docker runs only noncritical dashboard and integration services; it is not a
+dependency for AquaOS Core. The display Pi is likewise noncritical. A physical
+appliance failure does stop Core, so independent equipment safeguards,
+appropriate UPS coverage, automatic service startup, tested backups/restores,
+and replacement-machine recovery remain mandatory operational controls. Do not
+install AquaOS on a shared desktop, NAS, general Docker host, or hypervisor host.
 
 Home Assistant is the normal operational UI. The AquaOS Admin GUI is for
 installation, configuration, diagnostics, backup/restore, upgrades, rollback,
@@ -110,10 +109,10 @@ Prompt 11 adds bounded optional InfluxDB persistence and sample Grafana
 provisioning. Storage failure never blocks control; see
 [docs/persistence.md](docs/persistence.md).
 
-Prompt 12 adds the native Control VM operations service, headless `aquaosctl`,
+Prompt 12 adds the native host operations service, headless `aquaosctl`,
 and separately launched embedded Admin GUI. See
-[docs/control-vm-installation.md](docs/control-vm-installation.md). Physical
-clean-VM and cross-server acceptance evidence remains required.
+[docs/appliance-installation.md](docs/appliance-installation.md). Physical
+clean-host and replacement-machine acceptance evidence remains required.
 
 Prompts 13–16 add security gates, frozen v1 contracts, a traceable acceptance
 checklist, the removable `aquaos-vision` scaffold, and reproducible candidate
@@ -121,7 +120,7 @@ packaging. AquaOS is still not v1.0: physical and 72-hour evidence remains
 release-blocking. See [docs/easy-test.md](docs/easy-test.md) for the shortest
 safe evaluation path.
 
-For the complete component-by-component deployment—including the Control VM,
+For the complete component-by-component deployment—including the appliance,
 Core, recovery tools, optional services, Home Assistant, Grafana, Admin GUI,
 hardware bench, display kiosk, backups, and acceptance checks—follow the
 [complete installation guide](docs/installation.md).
@@ -129,8 +128,8 @@ hardware bench, display kiosk, backups, and acceptance checks—follow the
 For most new users, start with the
 [dedicated Debian appliance installer](docs/appliance-installation.md). It keeps
 Core native while installing the optional dashboard stack and handing off to a
-browser wizard. The [guided Proxmox path](docs/easy-install.md) remains the
-advanced option when stronger VM isolation is preferred.
+browser wizard. Add `--advanced-history` when long-term InfluxDB storage and
+Grafana dashboards are desired; Home Assistant history is included by default.
 
 ## Safe development startup
 
@@ -178,12 +177,12 @@ changes are rejected with restart reasons and leave the active digest and
 snapshot unchanged. See [docs/configuration.md](docs/configuration.md) and
 [configs/schema-v1.json](configs/schema-v1.json).
 
-## Native Control VM foundation deployment
+## Native appliance foundation deployment
 
 The Linux amd64 binary, sample configuration, hardened systemd unit, local
 verification command, rollback, and host-failure guidance are documented
 in [deployments/systemd/README.md](deployments/systemd/README.md). This is a
-manual dedicated-Control-VM deployment, not the guided installer, Admin GUI,
+manual dedicated-appliance deployment, not the guided installer, Admin GUI,
 or full backup/restore system scheduled for later milestones.
 
 ## Repository layout
@@ -204,7 +203,7 @@ or full backup/restore system scheduled for later milestones.
 - `internal/safety` — operating modes, interlocks, overrides, and watchdog policy
 - `internal/adapters/{shelly,esp32,simulator}` — adapter boundaries
 - `internal/bench` — Prompt 8 adapter-to-state/alarm/safe-response coordination
-- `deployments/systemd` — minimal native Linux Control VM deployment
+- `deployments/systemd` — minimal native Linux appliance deployment
 - `docs/adr` — architecture decision records
 - `configs` — non-secret example configurations
 

@@ -47,7 +47,7 @@ bench:
   safe_load_acknowledged: false
 storage:
   influxdb:
-    enabled: true
+    enabled: false
     url: "http://localhost:8086"
     organization: aquaos
     bucket: telemetry

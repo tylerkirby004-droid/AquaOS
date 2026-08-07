@@ -10,4 +10,4 @@ test -f /etc/aquaos/aquaos.yaml
 systemctl is-enabled --quiet aquaos.service
 systemctl is-active --quiet aquaos.service
 curl --fail --silent --show-error http://127.0.0.1:8080/health/live >/dev/null
-echo "AquaOS Control VM verification passed"
+echo "AquaOS dedicated appliance verification passed"

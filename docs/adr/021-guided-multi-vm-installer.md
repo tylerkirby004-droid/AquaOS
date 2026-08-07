@@ -1,6 +1,6 @@
 # ADR-021: Dry-run-first multi-VM installation
 
-- Status: Accepted
+- Status: Superseded by ADR-023
 - Date: 2026-08-07
 
 ## Context

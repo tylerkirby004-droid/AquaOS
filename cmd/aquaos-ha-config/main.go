@@ -12,7 +12,7 @@ import (
 
 func main() {
 	configuration := flag.String("config", "", "validated AquaOS configuration")
-	grafanaURL := flag.String("grafana-url", "", "operator-reachable Grafana base URL")
+	grafanaURL := flag.String("grafana-url", "", "optional operator-reachable Grafana base URL")
 	output := flag.String("output", "", "dashboard output path")
 	flag.Parse()
 	if *configuration == "" || *output == "" {

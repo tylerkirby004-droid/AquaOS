@@ -15,11 +15,11 @@ physical state
     -> reported-state reconciliation
 ```
 
-AquaOS Core on a dedicated Linux amd64 control host is the authoritative local
-controller and runs natively under systemd. ADR-022 makes a dedicated Debian
-appliance the default guided profile; the separate Proxmox Control VM remains
-the advanced strong-isolation profile. AquaOS is never installed directly on
-the Proxmox host, and Docker is not part of the critical Core path. The baseline
+AquaOS Core on a dedicated Linux amd64 Debian appliance is the authoritative
+local controller and runs natively under systemd. ADR-023 makes this the sole
+supported deployment profile. The appliance must not be a shared desktop, NAS,
+general Docker host, or hypervisor host. Docker is not part of the critical
+Core path. The baseline
 adapters are Ethernet/PoE ESP32 sensor nodes and
 Shelly Plug US Gen4 outputs communicating directly over the local LAN. Reef-Pi
 is only a possible future compatibility adapter.
@@ -35,8 +35,8 @@ the normal operational UI. The AquaOS Admin GUI is a non-authoritative
 operations client, and all of its mutations pass through authenticated Core
 APIs/application services and safety validation.
 
-Neither deployment profile eliminates its physical-host failure domain. A
-Proxmox-host or dedicated-appliance failure stops Core. Independent physical
+The deployment does not eliminate its physical-host failure domain. A
+dedicated-appliance failure stops Core. Independent physical
 equipment safeguards, UPS planning for the host and network, automatic service
 startup, tested backups/restores, and replacement-host recovery mitigate that
 risk without hiding it.

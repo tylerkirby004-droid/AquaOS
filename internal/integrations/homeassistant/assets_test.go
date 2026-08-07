@@ -24,6 +24,18 @@ func TestDashboardUsesStableDiscoveryEntities(t *testing.T) {
 	}
 }
 
+func TestStandardDashboardUsesHomeAssistantHistoryWithoutGrafana(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.Inventory.Sensors = []config.Sensor{{EntityID: "temperature"}}
+	payload, err := Dashboard(cfg, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(payload), "type: history-graph") || strings.Contains(string(payload), "type: iframe") {
+		t.Fatalf("standard dashboard is not Home Assistant-only:\n%s", payload)
+	}
+}
+
 func TestEmptyDashboardIsValidYAML(t *testing.T) {
 	payload, err := Dashboard(config.Defaults(), "https://grafana.local")
 	if err != nil {

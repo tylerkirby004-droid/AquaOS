@@ -2,13 +2,14 @@
 set -eu
 
 usage() {
-  echo "usage: $0 --release DIR --repository DIR --version VERSION --sha256 HEX --site-id ID --address LAN_ADDRESS [--timezone ZONE] [--apply --ack-dedicated-appliance --ack-independent-safeguards]" >&2
+  echo "usage: $0 --version VERSION --sha256 HEX --site-id ID --address LAN_ADDRESS [--release DIR --repository DIR --timezone ZONE --advanced-history] [--apply --ack-dedicated-appliance --ack-independent-safeguards]" >&2
 }
 
 release=. repository=. version= checksum= site_id= address= timezone=UTC
 apply=false
 ack_appliance=false
 ack_safeguards=false
+advanced_history=false
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --release) release=$2; shift 2 ;;
@@ -18,6 +19,7 @@ while [ "$#" -gt 0 ]; do
     --site-id) site_id=$2; shift 2 ;;
     --address) address=$2; shift 2 ;;
     --timezone) timezone=$2; shift 2 ;;
+    --advanced-history) advanced_history=true; shift ;;
     --apply) apply=true; shift ;;
     --ack-dedicated-appliance) ack_appliance=true; shift ;;
     --ack-independent-safeguards) ack_safeguards=true; shift ;;
@@ -26,7 +28,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "$(id -u)" -ne 0 ]; then echo "run with sudo on a dedicated Debian computer" >&2; exit 1; fi
-if [ -d /etc/pve ]; then echo "refusing to install on a Proxmox host" >&2; exit 1; fi
+if [ -d /etc/pve ]; then echo "refusing to install on a hypervisor host" >&2; exit 1; fi
 if [ ! -r /etc/os-release ]; then echo "Debian operating-system information is unavailable" >&2; exit 1; fi
 . /etc/os-release
 if [ "${ID:-}" != debian ] || [ "$(dpkg --print-architecture)" != amd64 ]; then
@@ -62,10 +64,11 @@ printf '%s  %s\n' "$checksum" "$release/aquaos-linux-amd64" | sha256sum --check 
 
 echo "AquaOS dedicated-appliance plan"
 echo "  Native critical service: AquaOS Core under systemd"
-echo "  Optional containers: Home Assistant, Mosquitto, InfluxDB, Grafana"
+echo "  Standard services: Home Assistant and Mosquitto"
+if [ "$advanced_history" = true ]; then echo "  Advanced History: InfluxDB and Grafana"; fi
 echo "  Browser setup: https://$address:8090/admin/"
 echo "  Daily dashboard: http://$address:8123"
-echo "  Trends: http://$address:3000"
+if [ "$advanced_history" = true ]; then echo "  Advanced trends: http://$address:3000"; fi
 echo "No aquarium equipment will be commissioned or activated by this installer."
 if [ "$apply" != true ]; then
   echo "Dry run only. Repeat with --apply and both acknowledgement flags after review."
@@ -80,30 +83,43 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends docker.io docker-compose openssl ca-certificates
 systemctl enable --now docker
-"$repository/scripts/install-optional-services.sh" "$repository/infrastructure/docker" "$site_id"
+profile=standard
+if [ "$advanced_history" = true ]; then profile=advanced-history; fi
+"$repository/scripts/install-optional-services.sh" "$repository/infrastructure/docker" "$site_id" "$profile"
 
 install -d -m 0750 /etc/aquaos /etc/aquaos/secrets /opt/aquaos/bin /opt/aquaos-homeassistant
 printf 'u aquaos - "AquaOS service" /var/lib/aquaos /usr/sbin/nologin\n' > /usr/lib/sysusers.d/aquaos.conf
 systemd-sysusers /usr/lib/sysusers.d/aquaos.conf
 core_password=$(sed -n 's/^AquaOS Core MQTT password: //p' /root/aquaos-services-credentials.txt)
 influx_token=$(sed -n 's/^INFLUXDB_ADMIN_TOKEN=//p' /opt/aquaos-services/.env)
-if [ -z "$core_password" ] || [ -z "$influx_token" ]; then echo "generated service credentials are incomplete" >&2; exit 1; fi
-printf '%s\n' "$influx_token" > /etc/aquaos/secrets/influx.token
+if [ -z "$core_password" ]; then echo "generated MQTT credentials are incomplete" >&2; exit 1; fi
+if [ "$advanced_history" = true ]; then
+  if [ -z "$influx_token" ]; then echo "generated InfluxDB credentials are incomplete" >&2; exit 1; fi
+  printf '%s\n' "$influx_token" > /etc/aquaos/secrets/influx.token
+fi
 api_token=$(openssl rand -hex 32)
 admin_token=$(openssl rand -hex 32)
 printf '%s\n' "$api_token" > /etc/aquaos/secrets/api.token
 printf 'AQUAOS_MQTT_USERNAME=aquaos-core\nAQUAOS_MQTT_PASSWORD=%s\n' "$core_password" > /etc/aquaos/aquaos.env
-chmod 0640 /etc/aquaos/aquaos.env /etc/aquaos/secrets/influx.token /etc/aquaos/secrets/api.token
-chown root:aquaos /etc/aquaos/aquaos.env /etc/aquaos/secrets/influx.token /etc/aquaos/secrets/api.token
+chmod 0640 /etc/aquaos/aquaos.env /etc/aquaos/secrets/api.token
+chown root:aquaos /etc/aquaos/aquaos.env /etc/aquaos/secrets/api.token
+if [ "$advanced_history" = true ]; then
+  chmod 0640 /etc/aquaos/secrets/influx.token
+  chown root:aquaos /etc/aquaos/secrets/influx.token
+fi
 
 sed "s/site_id: home-reef/site_id: $site_id/" "$repository/configs/aquaos-appliance.yaml" > /tmp/aquaos-appliance.yaml
+if [ "$advanced_history" = true ]; then
+  sed '/^storage:/,/^inventory:/ s/^    enabled: false/    enabled: true/' /tmp/aquaos-appliance.yaml > /tmp/aquaos-appliance-history.yaml
+  mv /tmp/aquaos-appliance-history.yaml /tmp/aquaos-appliance.yaml
+fi
 chmod 0755 "$release/aquaosctl-linux-amd64" "$release/aquaos-ha-config-linux-amd64"
 for artifact in aquaos-admin-linux-amd64 aquaos-ha-config-linux-amd64; do
   artifact_checksum=$(sed -n '1{s/ .*//;p;}' "$release/$artifact.sha256")
   "$release/aquaosctl-linux-amd64" verify-artifact --binary "$release/$artifact" --sha256 "$artifact_checksum" --signature "$release/$artifact.sig.hex" --public-key "$release/aquaos-ed25519-public-key.hex"
 done
-"$release/aquaosctl-linux-amd64" install --binary "$release/aquaos-linux-amd64" --config /tmp/aquaos-appliance.yaml --version "$version" --sha256 "$checksum" --signature "$release/aquaos-linux-amd64.sig.hex" --public-key "$release/aquaos-ed25519-public-key.hex" --ack-control-vm --dry-run
-"$release/aquaosctl-linux-amd64" install --binary "$release/aquaos-linux-amd64" --config /tmp/aquaos-appliance.yaml --version "$version" --sha256 "$checksum" --signature "$release/aquaos-linux-amd64.sig.hex" --public-key "$release/aquaos-ed25519-public-key.hex" --ack-control-vm
+"$release/aquaosctl-linux-amd64" install --binary "$release/aquaos-linux-amd64" --config /tmp/aquaos-appliance.yaml --version "$version" --sha256 "$checksum" --signature "$release/aquaos-linux-amd64.sig.hex" --public-key "$release/aquaos-ed25519-public-key.hex" --ack-dedicated-host --dry-run
+"$release/aquaosctl-linux-amd64" install --binary "$release/aquaos-linux-amd64" --config /tmp/aquaos-appliance.yaml --version "$version" --sha256 "$checksum" --signature "$release/aquaos-linux-amd64.sig.hex" --public-key "$release/aquaos-ed25519-public-key.hex" --ack-dedicated-host
 install -m 0755 "$release/aquaosctl-linux-amd64" /opt/aquaos/bin/aquaosctl
 install -m 0755 "$release/aquaos-admin-linux-amd64" /opt/aquaos/bin/aquaos-admin
 install -m 0755 "$release/aquaos-ha-config-linux-amd64" /opt/aquaos/bin/aquaos-ha-config
@@ -111,13 +127,23 @@ install -m 0755 "$release/aquaos-ha-config-linux-amd64" /opt/aquaos/bin/aquaos-h
 cp "$repository/homeassistant/appliance/configuration.yaml" /opt/aquaos-homeassistant/configuration.yaml
 alarm_entity=$(printf '%s' "aquaos_${site_id}_notification" | tr '-' '_')
 sed "s/AQUAOS_ALARM_ENTITY/$alarm_entity/g" "$repository/homeassistant/appliance/automations.yaml" > /opt/aquaos-homeassistant/automations.yaml
-"$release/aquaos-ha-config-linux-amd64" --config /etc/aquaos/aquaos.yaml --grafana-url "http://$address:3000" --output /opt/aquaos-homeassistant/aquaos-dashboard.yaml
+dashboard_arguments="--config /etc/aquaos/aquaos.yaml --output /opt/aquaos-homeassistant/aquaos-dashboard.yaml"
+if [ "$advanced_history" = true ]; then dashboard_arguments="$dashboard_arguments --grafana-url http://$address:3000"; fi
+"$release/aquaos-ha-config-linux-amd64" $dashboard_arguments
 printf 'TZ=%s\n' "$timezone" >> /opt/aquaos-services/.env
 cd /opt/aquaos-services
 if docker compose version >/dev/null 2>&1; then
-  docker compose -f compose.yaml -f compose.appliance.yaml up -d
+  if [ "$advanced_history" = true ]; then
+    docker compose -f compose.yaml -f compose.appliance.yaml up -d mosquitto homeassistant influxdb grafana
+  else
+    docker compose -f compose.yaml -f compose.appliance.yaml up -d mosquitto homeassistant
+  fi
 else
-  docker-compose -f compose.yaml -f compose.appliance.yaml up -d
+  if [ "$advanced_history" = true ]; then
+    docker-compose -f compose.yaml -f compose.appliance.yaml up -d mosquitto homeassistant influxdb grafana
+  else
+    docker-compose -f compose.yaml -f compose.appliance.yaml up -d mosquitto homeassistant
+  fi
 fi
 
 openssl req -x509 -newkey rsa:3072 -sha256 -nodes -days 825 \
@@ -147,7 +173,7 @@ cat > /etc/systemd/system/aquaos-homeassistant-dashboard.service <<EOF
 Description=Regenerate the non-authoritative AquaOS Home Assistant dashboard
 [Service]
 Type=oneshot
-ExecStart=/opt/aquaos/bin/aquaos-ha-config --config /etc/aquaos/aquaos.yaml --grafana-url http://$address:3000 --output /opt/aquaos-homeassistant/aquaos-dashboard.yaml
+ExecStart=/opt/aquaos/bin/aquaos-ha-config $dashboard_arguments
 EOF
 cat > /etc/systemd/system/aquaos-homeassistant-dashboard.path <<EOF
 [Unit]

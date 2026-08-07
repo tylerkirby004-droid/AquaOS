@@ -12,11 +12,9 @@ binary="$output_dir/aquaos-linux-amd64"
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o "$binary" ./cmd/aquaos
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o "$output_dir/aquaosctl-linux-amd64" ./cmd/aquaosctl
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o "$output_dir/aquaos-admin-linux-amd64" ./cmd/aquaos-admin
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o "$output_dir/aquaos-deploy-linux-amd64" ./cmd/aquaos-deploy
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o "$output_dir/aquaos-ha-config-linux-amd64" ./cmd/aquaos-ha-config
-CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -o "$output_dir/aquaos-deploy-windows-amd64.exe" ./cmd/aquaos-deploy
 
-for artifact in "$binary" "$output_dir/aquaosctl-linux-amd64" "$output_dir/aquaos-admin-linux-amd64" "$output_dir/aquaos-deploy-linux-amd64" "$output_dir/aquaos-ha-config-linux-amd64" "$output_dir/aquaos-deploy-windows-amd64.exe"; do
+for artifact in "$binary" "$output_dir/aquaosctl-linux-amd64" "$output_dir/aquaos-admin-linux-amd64" "$output_dir/aquaos-ha-config-linux-amd64"; do
   digest=$(sha256sum "$artifact" | awk '{print $1}')
   printf '%s  %s\n' "$digest" "$(basename "$artifact")" > "$artifact.sha256"
   printf '%s' "$digest" | openssl pkeyutl -sign -rawin -inkey "$AQUAOS_SIGNING_KEY" > "$artifact.sig"
@@ -30,4 +28,4 @@ mkdir -p "$output_dir/infrastructure/docker"
 cp infrastructure/docker/compose.yaml infrastructure/docker/compose.appliance.yaml infrastructure/docker/.env.example "$output_dir/infrastructure/docker/"
 cp -R infrastructure/docker/grafana infrastructure/docker/mosquitto "$output_dir/infrastructure/docker/"
 cp -R homeassistant/appliance "$output_dir/homeassistant/appliance"
-cp scripts/install-appliance.sh scripts/install-optional-services.sh scripts/verify-appliance-isolation.sh "$output_dir/scripts/"
+cp scripts/install-appliance.sh scripts/install-optional-services.sh scripts/verify-appliance-host.sh scripts/verify-appliance-isolation.sh "$output_dir/scripts/"

@@ -12,10 +12,10 @@ repository is **not release-ready** while any required row is pending.
 | Sensor faults, adapter loss, leak, stuck relay, reconciliation | simulator traces and physical bench log | simulator PASS; hardware pending |
 | Home Assistant discovery and broker outage | integration tests plus HA observation | tests PASS; live observation pending |
 | Storage and display-Pi outage | optional-outage tests plus operator observation | tests PASS; physical observation pending |
-| Backup/restore, upgrade/rollback, headless recovery | clean Control VM and replacement-host logs | pending |
+| Backup/restore, upgrade/rollback, headless recovery | clean appliance and replacement-host logs | pending |
 | Admin validation and device setup | browser plus CLI recovery test | automated policy tests PASS; end-to-end pending |
-| Process restart and Control VM reboot | systemd journal and state comparison | pending |
-| Proxmox VM stop/start and host maintenance | timestamps, alarms, recovery state | pending |
+| Process restart and appliance reboot | systemd journal and state comparison | pending |
+| Power interruption and replacement-machine recovery | timestamps, alarms, recovery state | pending |
 | Clean VM install and automatic startup | signed artifact digest and journal | pending |
 | Clean dedicated-appliance install | dry-run/apply log, signed artifact digests, browser onboarding | tooling complete; physical run pending |
 | Optional-container outage on appliance | `verify-appliance-isolation.sh` evidence | automated tool available; target-host run pending |

@@ -145,13 +145,13 @@ func TestInterruptedInstallDoesNotReplaceExistingBinary(t *testing.T) {
 	}
 }
 
-func TestInstallRejectsProxmoxHost(t *testing.T) {
+func TestInstallRejectsHypervisorHost(t *testing.T) {
 	host := newFakeHost()
 	host.dirs["/etc/pve"] = true
 	service := newService(t, host)
 	_, err := service.Install(context.Background(), signInstall(t, InstallRequest{Actor: administrator, Version: "v0.8.0", Binary: []byte("binary"), Configuration: validConfiguration(t), ControlVMAcknowledged: true}))
 	if err == nil {
-		t.Fatal("Proxmox host was accepted")
+		t.Fatal("hypervisor host was accepted")
 	}
 }
 

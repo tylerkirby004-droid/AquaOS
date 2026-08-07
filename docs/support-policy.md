@@ -1,9 +1,9 @@
 # Compatibility and support policy
 
-Linux amd64 on a dedicated Debian-family Control VM is the primary target.
+Linux amd64 on a dedicated Debian appliance is the sole supported production target.
 Linux arm64 is a portability target, not the production recommendation. The
-Proxmox host, containers, Windows, macOS, direct Internet exposure, and direct
-installation on a hypervisor are unsupported Core environments.
+Containers, Windows, macOS, direct Internet exposure, shared general-purpose
+hosts, and installation on a hypervisor host are unsupported Core environments.
 
 Until v1.0 is approved, every build is pre-release. After v1.0, the latest minor
 release line receives security and correctness fixes. Contract compatibility
