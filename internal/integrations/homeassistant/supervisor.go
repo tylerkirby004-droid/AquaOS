@@ -80,6 +80,11 @@ func (c *SupervisorClient) SetupHistory(ctx context.Context) (HistoryStatus, err
 		return HistoryStatus{}, err
 	}
 	if !current.Installed {
+		// A newly published companion app may not yet exist in Supervisor's
+		// cached store. Reloading here keeps installation genuinely one-click.
+		if _, reloadErr := c.request(ctx, http.MethodPost, "/store/reload", map[string]any{}, nil); reloadErr != nil {
+			return HistoryStatus{}, fmt.Errorf("refresh Home Assistant app store: %w", reloadErr)
+		}
 		status, installErr := c.request(ctx, http.MethodPost, "/addons/"+historySlug+"/install", map[string]any{}, nil)
 		if installErr != nil {
 			return HistoryStatus{}, fmt.Errorf("install AquaOS Advanced Trends: %w", installErr)

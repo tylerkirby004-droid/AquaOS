@@ -36,10 +36,10 @@ jobs:
           platforms: linux/amd64
           push: true
           build-args: |
-            BUILD_VERSION=0.2.0
+            BUILD_VERSION=0.2.1
             BUILD_ARCH=amd64
           tags: |
-            ghcr.io/tylerkirby004-droid/aquaos-addon:0.2.0
+            ghcr.io/tylerkirby004-droid/aquaos-addon:0.2.1
             ghcr.io/tylerkirby004-droid/aquaos-addon:edge
       - uses: docker/build-push-action@v6
         with:

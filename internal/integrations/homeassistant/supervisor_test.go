@@ -27,6 +27,8 @@ func TestSupervisorClientInstallsHistoryWithoutExposingCredentials(t *testing.T)
 		mu.Lock()
 		defer mu.Unlock()
 		switch r.Method + " " + r.URL.Path {
+		case "POST /store/reload":
+			writeSupervisorResponse(w, nil)
 		case "GET /addons/self/info":
 			writeSupervisorResponse(w, map[string]any{"slug": "265912a1_aquaos"})
 		case "GET /addons/265912a1_aquaos_history/info":

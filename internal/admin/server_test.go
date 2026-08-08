@@ -149,9 +149,18 @@ func TestEmbeddedAdminUIAcceptsAndClearsFirstBootHandoff(t *testing.T) {
 		t.Fatal(err)
 	}
 	contents := string(payload)
-	for _, required := range []string{"access_token", "history.replaceState", "resumeSession()", "applicationBase", "api/session", "renderServiceLinks()", "homeAssistantSession"} {
+	for _, required := range []string{"access_token", "history.replaceState", "resumeSession()", "applicationBase", "api/session", "renderServiceLinks()", "homeAssistantSession", "function uuid()", "crypto.getRandomValues"} {
 		if !strings.Contains(contents, required) {
 			t.Fatalf("Admin UI does not contain secure first-boot handoff %q", required)
+		}
+	}
+	style, err := assets.ReadFile("web/style.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, color := range []string{"#1e1e1e", "#252526", "#cccccc"} {
+		if !strings.Contains(string(style), color) {
+			t.Fatalf("Admin UI dark theme is missing neutral color %q", color)
 		}
 	}
 }

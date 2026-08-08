@@ -446,7 +446,12 @@ func (s *Server) homeAssistantDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := s.homeAssistant.Devices(r.Context())
-	s.respond(w, value, err)
+	if err != nil {
+		s.logger.Warn("Home Assistant inventory request failed", "error", err)
+		writeProblem(w, http.StatusBadGateway, "home_assistant_inventory_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, value)
 }
 
 func (s *Server) historyStatus(w http.ResponseWriter, r *http.Request) {
@@ -464,7 +469,12 @@ func (s *Server) setupHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := s.advancedHistory.SetupHistory(r.Context())
-	s.respond(w, value, err)
+	if err != nil {
+		s.logger.Warn("Advanced history setup failed", "error", err)
+		writeProblem(w, http.StatusBadGateway, "history_setup_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, value)
 }
 
 type editableConfiguration struct {
