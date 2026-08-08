@@ -34,7 +34,9 @@ jobs:
           file: aquaos/Dockerfile
           platforms: linux/amd64
           push: true
-          build-args: BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.23
+          build-args: |
+            BUILD_VERSION=0.1.0-dev
+            BUILD_ARCH=amd64
           tags: |
             ghcr.io/tylerkirby004-droid/aquaos-addon:0.1.0-dev
             ghcr.io/tylerkirby004-droid/aquaos-addon:edge
