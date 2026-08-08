@@ -55,8 +55,11 @@ func NewRegistryClient(url, token string, timeout time.Duration) (*RegistryClien
 
 // Devices returns Home Assistant devices with their registered entities.
 func (c *RegistryClient) Devices(ctx context.Context) ([]RegistryDevice, error) {
-	connection, _, err := c.dialer.DialContext(ctx, c.url, nil)
+	connection, response, err := c.dialer.DialContext(ctx, c.url, nil)
 	if err != nil {
+		if response != nil {
+			_ = response.Body.Close()
+		}
 		return nil, fmt.Errorf("connect Home Assistant registry: %w", err)
 	}
 	defer func() { _ = connection.Close() }()
