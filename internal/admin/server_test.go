@@ -109,6 +109,19 @@ func TestEmbeddedAdminUIIsAvailableWithoutNodeBuild(t *testing.T) {
 	}
 }
 
+func TestEmbeddedAdminUIAcceptsAndClearsFirstBootHandoff(t *testing.T) {
+	payload, err := assets.ReadFile("web/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	contents := string(payload)
+	for _, required := range []string{"access_token", "history.replaceState", "byId('connect').click()"} {
+		if !strings.Contains(contents, required) {
+			t.Fatalf("Admin UI does not contain secure first-boot handoff %q", required)
+		}
+	}
+}
+
 func TestAdminReturnsRedactedConfigurationThroughApplicationService(t *testing.T) {
 	server := newTestServer(t, &fakeOperations{})
 	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/config", nil)

@@ -2,10 +2,10 @@
 set -eu
 
 usage() {
-  echo "usage: $0 --version VERSION --sha256 HEX --site-id ID --address LAN_ADDRESS [--release DIR --repository DIR --timezone ZONE --advanced-history] [--apply --ack-dedicated-appliance --ack-independent-safeguards]" >&2
+  echo "usage: $0 --version VERSION --sha256 HEX --site-id ID --address LAN_ADDRESS --admin-token HEX [--release DIR --repository DIR --timezone ZONE --advanced-history] [--apply --ack-dedicated-appliance --ack-independent-safeguards]" >&2
 }
 
-release=. repository=. version= checksum= site_id= address= timezone=UTC
+release=. repository=. version= checksum= site_id= address= timezone=UTC admin_token=
 apply=false
 ack_appliance=false
 ack_safeguards=false
@@ -19,6 +19,7 @@ while [ "$#" -gt 0 ]; do
     --site-id) site_id=$2; shift 2 ;;
     --address) address=$2; shift 2 ;;
     --timezone) timezone=$2; shift 2 ;;
+    --admin-token) admin_token=$2; shift 2 ;;
     --advanced-history) advanced_history=true; shift ;;
     --apply) apply=true; shift ;;
     --ack-dedicated-appliance) ack_appliance=true; shift ;;
@@ -35,7 +36,7 @@ if [ "${ID:-}" != debian ] || [ "$(dpkg --print-architecture)" != amd64 ]; then
   echo "the appliance profile requires dedicated Debian amd64" >&2
   exit 1
 fi
-for value in "$release" "$repository" "$version" "$checksum" "$site_id" "$address"; do
+for value in "$release" "$repository" "$version" "$checksum" "$site_id" "$address" "$admin_token"; do
   if [ -z "$value" ]; then usage; exit 2; fi
 done
 case "$site_id" in *[!a-z0-9-]*|'') echo "invalid site ID" >&2; exit 1;; esac
@@ -45,6 +46,8 @@ case "$checksum" in *[!0-9a-f]*) echo "SHA-256 must be lowercase hexadecimal" >&
 case "$site_id" in [a-z]*) ;; *) echo "site ID must start with a lowercase letter" >&2; exit 1;; esac
 if [ "${#site_id}" -gt 63 ]; then echo "site ID is too long" >&2; exit 1; fi
 case "$address" in 10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*) ;; *) echo "address must be a private IPv4 LAN address" >&2; exit 1;; esac
+case "$admin_token" in *[!0-9a-f]*|'') echo "Admin token must be lowercase hexadecimal" >&2; exit 1;; esac
+if [ "${#admin_token}" -ne 64 ]; then echo "Admin token must contain 64 hexadecimal characters" >&2; exit 1; fi
 
 for path in \
   "$release/aquaos-linux-amd64" "$release/aquaosctl-linux-amd64" \
@@ -126,7 +129,6 @@ if [ "$advanced_history" = true ]; then
   printf '%s\n' "$influx_token" > /etc/aquaos/secrets/influx.token
 fi
 api_token=$(openssl rand -hex 32)
-admin_token=$(openssl rand -hex 32)
 printf '%s\n' "$api_token" > /etc/aquaos/secrets/api.token
 printf 'AQUAOS_MQTT_USERNAME=aquaos-core\nAQUAOS_MQTT_PASSWORD=%s\n' "$core_password" > /etc/aquaos/aquaos.env
 chmod 0640 /etc/aquaos/aquaos.env /etc/aquaos/secrets/api.token

@@ -5,6 +5,11 @@ const token = byId('token');
 const result = byId('result');
 const connection = byId('connection');
 const notice = byId('notice');
+const handoff = new URLSearchParams(window.location.hash.slice(1)).get('access_token');
+if (handoff) {
+  token.value = handoff;
+  window.history.replaceState(null, '', window.location.pathname + window.location.search);
+}
 let editable = null;
 let validatedDigest = '';
 let discovered = [];
@@ -175,6 +180,8 @@ byId('connect').addEventListener('click', async () => {
     showView('system');
   } catch (error) { connection.textContent = error.message; }
 });
+
+if (handoff) byId('connect').click();
 
 byId('verify').addEventListener('click', async () => {
   try {

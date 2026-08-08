@@ -10,7 +10,10 @@ import (
 
 type fakeRunner struct{ called bool }
 
-func (f *fakeRunner) Install(context.Context, InstallRequest) error { f.called = true; return nil }
+func (f *fakeRunner) Install(context.Context, InstallRequest) (InstallResult, error) {
+	f.called = true
+	return InstallResult{AdminAccessToken: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}, nil
+}
 
 func TestInstallRequiresAuthenticationAndAcknowledgements(t *testing.T) {
 	runner := &fakeRunner{}

@@ -27,7 +27,7 @@ services:
       - influxdb-config:/etc/influxdb2
 
   grafana:
-    image: grafana/grafana-oss:13.1
+    image: grafana/grafana:13.0.4
     restart: unless-stopped
     ports:
       - "3000:3000"

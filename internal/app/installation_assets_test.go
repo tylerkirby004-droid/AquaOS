@@ -17,6 +17,7 @@ func TestOptionalServicesComposeUsesCurrentAquaOSPipeline(t *testing.T) {
 	var document struct {
 		Services map[string]struct {
 			Profiles []string `yaml:"profiles"`
+			Image    string   `yaml:"image"`
 		} `yaml:"services"`
 	}
 	if err = yaml.Unmarshal(payload, &document); err != nil {
@@ -34,6 +35,9 @@ func TestOptionalServicesComposeUsesCurrentAquaOSPipeline(t *testing.T) {
 	}
 	if _, exists := document.Services["nodered"]; exists {
 		t.Fatal("Node-RED must not be part of the standard services stack")
+	}
+	if image := document.Services["grafana"].Image; image != "grafana/grafana:13.0.4" {
+		t.Fatalf("advanced history uses unverified Grafana image %q", image)
 	}
 }
 
