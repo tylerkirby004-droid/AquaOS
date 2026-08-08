@@ -9,6 +9,7 @@ image: ghcr.io/tylerkirby004-droid/aquaos-addon
 startup: services
 boot: auto
 init: false
+watchdog: http://[HOST]:8099/health/live
 ingress: true
 ingress_port: 8099
 ingress_entry: /admin/

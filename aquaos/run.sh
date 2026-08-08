@@ -17,7 +17,7 @@ printf '%s\n' '0.1.0-dev' > /var/lib/aquaos/current-version
 printf '%s\n' '[Unit]' 'Description=AquaOS Core (managed by Home Assistant Supervisor)' > /etc/systemd/system/aquaos.service
 
 core_loop() {
-  while true; do
+  while [[ ! -f /run/aquaos/stopping ]]; do
     /opt/aquaos/bin/aquaos -config /etc/aquaos/aquaos.yaml &
     core_pid=$!
     printf '%s\n' "${core_pid}" > /run/aquaos/core.pid
@@ -29,6 +29,7 @@ core_loop() {
 
 shutdown() {
   touch /run/aquaos/stopping
+  if [[ -n "${admin_pid:-}" ]]; then kill "${admin_pid}" 2>/dev/null || true; fi
   if [[ -f /run/aquaos/core.pid ]]; then kill "$(cat /run/aquaos/core.pid)" 2>/dev/null || true; fi
   if [[ -n "${core_loop_pid:-}" ]]; then kill "${core_loop_pid}" 2>/dev/null || true; fi
 }
@@ -36,14 +37,24 @@ trap shutdown TERM INT EXIT
 core_loop &
 core_loop_pid=$!
 
+core_ready=false
 for _ in $(seq 1 30); do
-  if wget -q -O /dev/null --header="Authorization: Bearer $(cat /config/api.token)" http://127.0.0.1:8080/health/ready; then break; fi
+  if wget -q -O /dev/null --header="Authorization: Bearer $(cat /config/api.token)" http://127.0.0.1:8080/health/ready; then
+    core_ready=true
+    break
+  fi
   sleep 1
 done
+if [[ "${core_ready}" != true ]]; then
+  bashio::log.fatal "AquaOS Core did not become ready; the panel will not start with a partial deployment."
+  exit 1
+fi
 
-exec /opt/aquaos/bin/aquaos-admin \
+/opt/aquaos/bin/aquaos-admin \
   -address 0.0.0.0:8099 \
   -trusted-ingress \
   -trusted-ingress-cidr 172.30.32.2/32 \
   -core-url http://127.0.0.1:8080 \
-  -core-token-file /config/api.token
+  -core-token-file /config/api.token &
+admin_pid=$!
+wait "${admin_pid}"
