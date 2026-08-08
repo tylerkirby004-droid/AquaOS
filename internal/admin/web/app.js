@@ -6,7 +6,9 @@ const result = byId('result');
 const connection = byId('connection');
 const notice = byId('notice');
 const handoff = new URLSearchParams(window.location.hash.slice(1)).get('access_token');
-const applicationBase = window.location.pathname.replace(/admin\/.*$/, '');
+const applicationBase = window.location.pathname.includes('/admin/')
+  ? window.location.pathname.replace(/admin\/.*$/, '')
+  : `${window.location.pathname.replace(/\/?$/, '/')}`;
 let editable = null;
 let validatedDigest = '';
 let discovered = [];

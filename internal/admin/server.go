@@ -173,6 +173,9 @@ func New(cfg Config, service Operations, logger *slog.Logger, options ...Option)
 	mux.Handle("POST /api/uninstall", result.authorize(http.HandlerFunc(result.uninstall)))
 	mux.Handle("POST /api/config/validate", result.authorize(http.HandlerFunc(result.validateConfiguration)))
 	mux.Handle("POST /api/config/apply", result.authorize(http.HandlerFunc(result.applyConfiguration)))
+	// The root file server is intentionally registered last. More-specific API
+	// and legacy /admin/ routes win, while Home Assistant Ingress can enter at /.
+	mux.Handle("GET /", http.FileServer(http.FS(web)))
 	result.server = &http.Server{Addr: cfg.Address, Handler: result.secure(mux), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
 	return result, nil
 }
