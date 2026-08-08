@@ -91,10 +91,10 @@ type Config struct {
 	// TrustedIngress delegates browser authentication to a trusted reverse
 	// proxy such as Home Assistant Ingress. The listener must not be exposed
 	// directly when this is enabled.
-	TrustedIngress      bool
+	TrustedIngress bool
 	// TrustedIngressCIDR is the exact reverse-proxy network allowed to use
 	// delegated authentication.
-	TrustedIngressCIDR  string
+	TrustedIngressCIDR string
 }
 
 // Server owns the authenticated Admin GUI listener.
