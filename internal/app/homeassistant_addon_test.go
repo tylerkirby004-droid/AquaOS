@@ -2,6 +2,7 @@ package app
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -24,9 +25,21 @@ func TestHomeAssistantAddonImagesAreDistinct(t *testing.T) {
 	}
 }
 
+func TestCoreAddonVersionMatchesRuntimeVersion(t *testing.T) {
+	core := readAddonManifest(t, "../../aquaos/config.yaml")
+	runScript, err := os.ReadFile("../../aquaos/run.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if core.Version == "" || !strings.Contains(string(runScript), "'"+core.Version+"' > /var/lib/aquaos/current-version") {
+		t.Fatalf("core add-on version %q is not written by run.sh", core.Version)
+	}
+}
+
 type addonManifest struct {
 	Image       string `yaml:"image"`
 	IngressPort int    `yaml:"ingress_port"`
+	Version     string `yaml:"version"`
 }
 
 func readAddonManifest(t *testing.T, path string) addonManifest {

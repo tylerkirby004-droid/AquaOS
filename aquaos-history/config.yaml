@@ -1,5 +1,5 @@
 name: AquaOS Advanced Trends
-version: "0.1.0-history"
+version: "0.1.1-history"
 slug: aquaos_history
 description: Automatically managed InfluxDB and Grafana for AquaOS long-term trends
 url: https://github.com/tylerkirby004-droid/AquaOS
