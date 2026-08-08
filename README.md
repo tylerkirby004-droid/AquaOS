@@ -1,8 +1,8 @@
 # AquaOS
 
 AquaOS is a local-first, safety-first reef aquarium control platform. AquaOS
-Core is an authoritative Go process whose supported production target is a
-dedicated Linux amd64 Debian appliance, running natively under systemd. It will
+Core is an authoritative Go process delivered primarily as a Home Assistant OS
+app on Linux amd64. It will
 validate sensor data, apply deterministic safety
 policy, manage equipment state machines, issue commands through local hardware
 adapters, reconcile reported state, raise alarms, and expose local APIs.
@@ -17,13 +17,29 @@ The governing project specification is the checked-in
 [AquaOS Development Bible, Edition 1.2](docs/AquaOS_Development_Bible_Edition_1.2.docx).
 The older Edition 1.1 file remains only as historical context for Prompts 1–7.
 
+## Install AquaOS
+
+> AquaOS remains pre-release and simulator-only. Do not connect aquarium
+> equipment or rely on it for livestock survival.
+
+On a Home Assistant OS computer, add the AquaOS app repository, install
+**AquaOS**, enable **Start on boot**, **Watchdog**, and **Show in sidebar**, then
+open **AquaOS**. Home Assistant supplies the login; AquaOS does not require a
+second code, IP address, certificate exception, or terminal command.
+
+[Add the AquaOS repository to Home Assistant](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Ftylerkirby004-droid%2FAquaOS)
+
+See [Home Assistant installation](docs/home-assistant-installation.md). The
+custom Debian ISO, Proxmox VM, and standalone systemd installer are now legacy
+engineering paths.
+
 ## Authority and failure boundary
 
 ```text
 Shelly / Ethernet-PoE ESP32 devices on the local LAN
                          |
                          v
-       AquaOS Core on dedicated appliance <----> local API
+       AquaOS Core in HA OS app <-----------> validated local API
                          |
                          +---- optional MQTT ---- Home Assistant / integrations
                          +---- optional storage - InfluxDB / Grafana
@@ -40,17 +56,15 @@ Core. Optional storage, dashboards, remote servers, Internet access, and AI are
 outside the critical control path. Reef-Pi is reserved for possible future
 compatibility and is not the baseline hardware authority.
 
-Docker runs only noncritical dashboard and integration services; it is not a
-dependency for AquaOS Core. The display Pi is likewise noncritical. A physical
-appliance failure does stop Core, so independent equipment safeguards,
-appropriate UPS coverage, automatic service startup, tested backups/restores,
-and replacement-machine recovery remain mandatory operational controls. Do not
-install AquaOS on a shared desktop, NAS, general Docker host, or hypervisor host.
+The Home Assistant OS computer is a shared failure domain: host or Supervisor
+failure can stop both Home Assistant and AquaOS. Independent safeguards,
+appropriate UPS coverage, automatic app startup, tested Home Assistant backups,
+and replacement-machine recovery remain mandatory.
 
-Home Assistant is the normal operational UI. The AquaOS Admin GUI is for
-installation, configuration, diagnostics, backup/restore, upgrades, rollback,
-and repair. It is non-authoritative: every mutation must pass through
-authenticated AquaOS APIs/application services and existing safety policy.
+The AquaOS Home Assistant sidebar is the single UI for operation, setup,
+configuration, diagnostics, backup/restore, upgrades, rollback, and repair. It
+is non-authoritative: every mutation passes through AquaOS application services
+and existing safety policy.
 
 ## Foundation architecture
 
@@ -125,13 +139,8 @@ Core, recovery tools, optional services, Home Assistant, Grafana, Admin GUI,
 hardware bench, display kiosk, backups, and acceptance checks—follow the
 [complete installation guide](docs/installation.md).
 
-For most new users, start with the
-[bootable USB installer](docs/usb-installation.md). Choose the target disk,
-reboot, and finish at `https://aquaos.local:8443` with the one-time code shown
-on the appliance. The signed command-line installer remains available for
-recovery. Add advanced history in the wizard only when long-term InfluxDB
-storage and Grafana dashboards are desired; Home Assistant history is included
-by default.
+The former bootable USB and command-line appliance installers are retained for
+legacy recovery testing. They are not the normal installation path.
 
 ## Safe development startup
 

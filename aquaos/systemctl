@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+case "$*" in
+  "is-active --quiet aquaos.service")
+    test -f /run/aquaos/core.pid && kill -0 "$(cat /run/aquaos/core.pid)"
+    ;;
+  "restart aquaos.service")
+    test -f /run/aquaos/core.pid
+    kill "$(cat /run/aquaos/core.pid)"
+    ;;
+  "daemon-reload"|"enable --now aquaos.service")
+    exit 0
+    ;;
+  *)
+    echo "unsupported service operation" >&2
+    exit 1
+    ;;
+esac

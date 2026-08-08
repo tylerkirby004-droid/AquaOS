@@ -89,6 +89,31 @@ func TestAdminAPIRequiresAuthentication(t *testing.T) {
 		t.Fatalf("status = %d", response.Code)
 	}
 }
+func TestTrustedIngressUsesProxyAuthentication(t *testing.T) {
+	server, err := New(Config{Address: "127.0.0.1:0", TrustedIngress: true, TrustedIngressCIDR: "192.0.2.1/32", MaximumRequestBytes: 64 * 1024, ShutdownTimeout: time.Second, AuthenticationRate: 100, AuthenticationBurst: 100, MutationRate: 100, MutationBurst: 100}, &fakeOperations{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/status", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("trusted ingress status = %d", response.Code)
+	}
+	if response.Header().Get("X-Frame-Options") != "" || !strings.Contains(response.Header().Get("Content-Security-Policy"), "frame-ancestors 'self'") {
+		t.Fatal("trusted ingress response cannot be embedded safely")
+	}
+}
+func TestTrustedIngressRejectsOtherInternalClients(t *testing.T) {
+	server, err := New(Config{Address: "127.0.0.1:0", TrustedIngress: true, TrustedIngressCIDR: "192.0.2.2/32", MaximumRequestBytes: 64 * 1024, ShutdownTimeout: time.Second, AuthenticationRate: 100, AuthenticationBurst: 100, MutationRate: 100, MutationBurst: 100}, &fakeOperations{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/repair", strings.NewReader(`{"dryRun":true}`)))
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("untrusted internal client status = %d", response.Code)
+	}
+}
 func TestAdminMutationCallsAuthorizedApplicationService(t *testing.T) {
 	service := &fakeOperations{}
 	server := newTestServer(t, service)
@@ -115,7 +140,7 @@ func TestEmbeddedAdminUIAcceptsAndClearsFirstBootHandoff(t *testing.T) {
 		t.Fatal(err)
 	}
 	contents := string(payload)
-	for _, required := range []string{"access_token", "history.replaceState", "resumeSession()", "fetch('/api/session'", "renderServiceLinks()", "Home Assistant", "Advanced trends"} {
+	for _, required := range []string{"access_token", "history.replaceState", "resumeSession()", "applicationBase", "api/session", "renderServiceLinks()", "homeAssistantSession"} {
 		if !strings.Contains(contents, required) {
 			t.Fatalf("Admin UI does not contain secure first-boot handoff %q", required)
 		}

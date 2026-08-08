@@ -88,6 +88,13 @@ type Config struct {
 	MutationBurst       int
 	TLSCertificateFile  string
 	TLSKeyFile          string
+	// TrustedIngress delegates browser authentication to a trusted reverse
+	// proxy such as Home Assistant Ingress. The listener must not be exposed
+	// directly when this is enabled.
+	TrustedIngress      bool
+	// TrustedIngressCIDR is the exact reverse-proxy network allowed to use
+	// delegated authentication.
+	TrustedIngressCIDR  string
 }
 
 // Server owns the authenticated Admin GUI listener.
@@ -108,11 +115,12 @@ type Server struct {
 	runtimeHealth    RuntimeHealth
 	sessionToken     string
 	secureCookie     bool
+	trustedIngress   *net.IPNet
 }
 
 // New constructs an Admin GUI server without starting it.
 func New(cfg Config, service Operations, logger *slog.Logger, options ...Option) (*Server, error) {
-	if cfg.Address == "" || len(cfg.Token) < 32 || cfg.MaximumRequestBytes < 1024 || cfg.MaximumRequestBytes > 64*1024*1024 || cfg.ShutdownTimeout <= 0 || cfg.AuthenticationRate < 1 || cfg.AuthenticationBurst < 1 || cfg.MutationRate < 1 || cfg.MutationBurst < 1 {
+	if cfg.Address == "" || (!cfg.TrustedIngress && len(cfg.Token) < 32) || cfg.MaximumRequestBytes < 1024 || cfg.MaximumRequestBytes > 64*1024*1024 || cfg.ShutdownTimeout <= 0 || cfg.AuthenticationRate < 1 || cfg.AuthenticationBurst < 1 || cfg.MutationRate < 1 || cfg.MutationBurst < 1 {
 		return nil, errors.New("admin listener, token, and safe bounds are required")
 	}
 	if service == nil || logger == nil {
@@ -121,13 +129,25 @@ func New(cfg Config, service Operations, logger *slog.Logger, options ...Option)
 	if (cfg.TLSCertificateFile == "") != (cfg.TLSKeyFile == "") {
 		return nil, errors.New("admin TLS certificate and key must be supplied together")
 	}
+	var trustedIngress *net.IPNet
+	if cfg.TrustedIngress {
+		_, network, parseErr := net.ParseCIDR(cfg.TrustedIngressCIDR)
+		if parseErr != nil {
+			return nil, errors.New("trusted ingress requires an explicit proxy CIDR")
+		}
+		trustedIngress = network
+	}
 	web, err := fs.Sub(assets, "web")
 	if err != nil {
 		return nil, err
 	}
-	mac := hmac.New(sha256.New, []byte(cfg.Token))
+	sessionSecret := cfg.Token
+	if cfg.TrustedIngress {
+		sessionSecret = "home-assistant-ingress"
+	}
+	mac := hmac.New(sha256.New, []byte(sessionSecret))
 	_, _ = mac.Write([]byte("aquaos-admin-browser-session-v1"))
-	result := &Server{cfg: cfg, operations: service, logger: logger, authentication: newRequestLimiter(cfg.AuthenticationRate, cfg.AuthenticationBurst, 1024), mutations: newRequestLimiter(cfg.MutationRate, cfg.MutationBurst, 1024), sessionToken: hex.EncodeToString(mac.Sum(nil)), secureCookie: cfg.TLSCertificateFile != ""}
+	result := &Server{cfg: cfg, operations: service, logger: logger, authentication: newRequestLimiter(cfg.AuthenticationRate, cfg.AuthenticationBurst, 1024), mutations: newRequestLimiter(cfg.MutationRate, cfg.MutationBurst, 1024), sessionToken: hex.EncodeToString(mac.Sum(nil)), secureCookie: cfg.TLSCertificateFile != "", trustedIngress: trustedIngress}
 	for _, option := range options {
 		option(result)
 	}
@@ -274,6 +294,10 @@ func (s *Server) authorize(next http.Handler) http.Handler {
 }
 
 func (s *Server) authenticated(r *http.Request) bool {
+	if s.cfg.TrustedIngress {
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		return err == nil && s.trustedIngress.Contains(net.ParseIP(host))
+	}
 	provided := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
 	if len(provided) == len(s.cfg.Token) && subtle.ConstantTimeCompare([]byte(provided), []byte(s.cfg.Token)) == 1 {
 		return true
@@ -283,6 +307,14 @@ func (s *Server) authenticated(r *http.Request) bool {
 }
 
 func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.TrustedIngress {
+		if !s.authenticated(r) {
+			writeProblem(w, http.StatusUnauthorized, "authentication_required", "The request did not arrive through Home Assistant Ingress.")
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	key := remoteKey(r)
 	if !s.authentication.allow(key, time.Now()) {
 		w.Header().Set("Retry-After", "1")
@@ -303,6 +335,9 @@ func (s *Server) sessionStatus(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
+	if s.cfg.TrustedIngress {
+		w.Header().Set("X-AquaOS-Authentication", "home-assistant-ingress")
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -313,10 +348,16 @@ func (s *Server) deleteSession(w http.ResponseWriter, _ *http.Request) {
 func (s *Server) secure(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+		frameAncestors := "'none'"
+		if s.cfg.TrustedIngress {
+			frameAncestors = "'self'"
+		}
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors "+frameAncestors)
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("X-Frame-Options", "DENY")
+		if !s.cfg.TrustedIngress {
+			w.Header().Set("X-Frame-Options", "DENY")
+		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
 			origin := r.Header.Get("Origin")
 			if origin != "" && origin != "http://"+r.Host && origin != "https://"+r.Host {

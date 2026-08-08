@@ -28,6 +28,8 @@ jobs:
       - name: Installation assets
         run: |
           sh -n scripts/*.sh
+          bash -n aquaos/run.sh
+          sh -n aquaos/systemctl
           cp infrastructure/docker/.env.example infrastructure/docker/.env
           docker compose -f docker-compose.yml config --quiet
           docker compose -f infrastructure/docker/compose.yaml config --quiet

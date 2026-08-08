@@ -6,11 +6,13 @@ const result = byId('result');
 const connection = byId('connection');
 const notice = byId('notice');
 const handoff = new URLSearchParams(window.location.hash.slice(1)).get('access_token');
+const applicationBase = window.location.pathname.replace(/admin\/.*$/, '');
 let editable = null;
 let validatedDigest = '';
 let discovered = [];
 let editingEquipmentID = '';
 let editingAlarmID = '';
+let homeAssistantSession = false;
 
 function normalizeConfiguration() {
   const config = editable.configuration;
@@ -51,7 +53,7 @@ function notify(message) {
 async function call(path, options = {}) {
   const headers = {...(token.value ? {Authorization: `Bearer ${token.value}`} : {}), ...(options.headers || {})};
   if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
-  const response = await fetch(path, {...options, headers});
+  const response = await fetch(`${applicationBase}${path.replace(/^\//, '')}`, {...options, headers});
   if (!response.ok) {
     let message = response.statusText;
     try { message = (await response.json()).detail || message; } catch (_) { /* response is not JSON */ }
@@ -98,13 +100,10 @@ function fillForm() {
 }
 
 function renderServiceLinks() {
-  const host = window.location.hostname;
   const links = [
-    {name: 'AquaOS Admin', url: `${window.location.protocol}//${window.location.host}/admin/`},
-    {name: 'Home Assistant', url: `http://${host}:8123`}
+    {name: 'AquaOS', url: window.location.href.split('#')[0]}
   ];
-  if (editable.configuration.storage.influxdb.enabled) links.push({name: 'Advanced trends', url: `http://${host}:3000`});
-  byId('serviceLinks').innerHTML = `<strong>Detected AquaOS pages</strong><div class="row-actions">${links.map(link => `<a href="${escapeHTML(link.url)}" target="_blank" rel="noreferrer">${escapeHTML(link.name)}</a>`).join('')}</div>`;
+  byId('serviceLinks').innerHTML = `<strong>Your AquaOS panel</strong><div class="row-actions">${links.map(link => `<a href="${escapeHTML(link.url)}">${escapeHTML(link.name)}</a>`).join('')}</div>`;
 }
 
 function renderRuntime(report) {
@@ -179,7 +178,7 @@ function addInventory(kind, value) {
 async function connect() {
   try {
     if (token.value) {
-      const paired = await fetch('/api/session', {method: 'POST', headers: {Authorization: `Bearer ${token.value}`}});
+      const paired = await fetch(`${applicationBase}api/session`, {method: 'POST', headers: {Authorization: `Bearer ${token.value}`}});
       if (!paired.ok) throw new Error('This browser could not be paired.');
       token.value = '';
     }
@@ -191,7 +190,7 @@ async function connect() {
     connection.textContent = 'Securely connected';
     connection.className = 'status connected';
     byId('pairing').hidden = true;
-    byId('signout').hidden = false;
+    byId('signout').hidden = homeAssistantSession;
     notify('Connected. Your current settings were loaded.');
     showView('system');
   } catch (error) { connection.textContent = error.message; }
@@ -199,20 +198,23 @@ async function connect() {
 
 byId('connect').addEventListener('click', connect);
 byId('signout').addEventListener('click', async () => {
-  await fetch('/api/session', {method: 'DELETE'});
+  await fetch(`${applicationBase}api/session`, {method: 'DELETE'});
   window.location.reload();
 });
 
 async function resumeSession() {
   if (handoff) {
     token.value = handoff;
-    const paired = await fetch('/api/session', {method: 'POST', headers: {Authorization: `Bearer ${handoff}`}});
+    const paired = await fetch(`${applicationBase}api/session`, {method: 'POST', headers: {Authorization: `Bearer ${handoff}`}});
     if (!paired.ok) { connection.textContent = 'Automatic browser pairing failed.'; return; }
     token.value = '';
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
   }
-  const session = await fetch('/api/session');
-  if (session.ok) await connect();
+  const session = await fetch(`${applicationBase}api/session`);
+  if (session.ok) {
+    homeAssistantSession = session.headers.get('X-AquaOS-Authentication') === 'home-assistant-ingress';
+    await connect();
+  }
 }
 
 resumeSession();

@@ -28,6 +28,8 @@ func run() int {
 	tokenFile := flag.String("token-file", "", "bearer token file")
 	tlsCertificate := flag.String("tls-cert", "", "TLS certificate PEM file")
 	tlsKey := flag.String("tls-key", "", "TLS private-key PEM file")
+	trustedIngress := flag.Bool("trusted-ingress", false, "delegate browser authentication to a trusted local ingress proxy")
+	trustedIngressCIDR := flag.String("trusted-ingress-cidr", "", "trusted ingress reverse-proxy CIDR")
 	coreURL := flag.String("core-url", "http://localhost:8080", "local AquaOS Core API base URL")
 	coreTokenFile := flag.String("core-token-file", "", "AquaOS Core API token file")
 	root := flag.String("root", "/", "managed dedicated-appliance root")
@@ -36,10 +38,14 @@ func run() int {
 	mutationRate := flag.Int("mutation-rate", 2, "mutations per second per client")
 	mutationBurst := flag.Int("mutation-burst", 4, "mutation burst per client")
 	flag.Parse()
-	token, err := readToken(*tokenFile)
-	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err)
-		return 1
+	var token string
+	var err error
+	if !*trustedIngress {
+		token, err = readToken(*tokenFile)
+		if err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
 	}
 	host, err := operations.NewLocalHost(*root)
 	if err != nil {
@@ -77,7 +83,7 @@ func run() int {
 		}
 		options = append(options, admin.WithRuntimeHealth(&coreHealthClient{client: httpClient, baseURL: strings.TrimRight(*coreURL, "/"), token: coreToken}))
 	}
-	server, err := admin.New(admin.Config{Address: *address, Token: token, MaximumRequestBytes: 32 * 1024 * 1024, ShutdownTimeout: 10 * time.Second, AuthenticationRate: *authenticationRate, AuthenticationBurst: *authenticationBurst, MutationRate: *mutationRate, MutationBurst: *mutationBurst, TLSCertificateFile: *tlsCertificate, TLSKeyFile: *tlsKey}, service, logger.With("component", "admin"), options...)
+	server, err := admin.New(admin.Config{Address: *address, Token: token, MaximumRequestBytes: 32 * 1024 * 1024, ShutdownTimeout: 10 * time.Second, AuthenticationRate: *authenticationRate, AuthenticationBurst: *authenticationBurst, MutationRate: *mutationRate, MutationBurst: *mutationBurst, TLSCertificateFile: *tlsCertificate, TLSKeyFile: *tlsKey, TrustedIngress: *trustedIngress, TrustedIngressCIDR: *trustedIngressCIDR}, service, logger.With("component", "admin"), options...)
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		return 1

@@ -1,33 +1,29 @@
 # AquaOS Development Rules
 
-The governing specification is `docs/AquaOS_Development_Bible_Edition_1.2.docx`.
-Prompts 1–7 predate its post-Prompt-7 deployment pivot and must not be rewritten
-solely because the production host changed.
+The governing specification is `docs/AquaOS_Development_Bible_Edition_1.2.docx`
+plus the user-approved post-Bible architecture decision in ADR-025. Preserve
+completed milestone history; do not rewrite it solely because deployment
+changed.
 
-AquaOS Core's sole supported production target is Linux amd64 on a dedicated,
-single-purpose Debian appliance, running natively under systemd. ADR-023
-supersedes the earlier Proxmox deployment choices. Never install AquaOS on a
-shared desktop, NAS, general Docker host, or hypervisor host, and never make
-Docker part of the critical control path.
+The primary operator installation is the AquaOS Home Assistant OS app on Linux
+amd64. Home Assistant Ingress provides the single AquaOS sidebar and user
+authentication. Do not add a second login, pairing code, exposed Admin port,
+custom Debian ISO, Proxmox requirement, or terminal step to the normal path.
+The older Debian/systemd profile is legacy only.
 
-The Raspberry Pi 4B is an optional display/kiosk only. Its failure, and failure
-of MQTT, Home Assistant, InfluxDB, Grafana, Node-RED, AI, Internet access, or any
-Admin GUI, must not prevent critical local control.
+Core's running control loop must not depend on MQTT, InfluxDB, Grafana,
+Node-RED, AI, Internet access, or the Home Assistant frontend process. The Home
+Assistant OS host and Supervisor are an acknowledged shared failure domain.
 
-Home Assistant is the daily operational UI. The separate AquaOS Admin GUI is
-non-authoritative: every mutation must use authenticated AquaOS APIs/application
-services and existing validation and safety policy.
+The AquaOS sidebar is the single user-facing surface for operations, setup,
+diagnostics, backup/restore, and repair. It is non-authoritative: every mutation
+must use AquaOS APIs/application services and existing validation and safety
+policy. Never let Home Assistant entities or automations bypass that pipeline.
 
-Do not obscure the dedicated appliance's physical failure domain. Production
-guidance must include independent physical equipment safeguards, UPS planning,
-automatic service startup, tested off-host backups/restores, and replacement-
-machine recovery.
-
-The normal end-user installation artifact is the bootable Debian appliance ISO
-defined by ADR-024. Its temporary first-boot service must use per-machine
-credentials, TLS, explicit safety acknowledgements, signed installer payloads,
-and simulator-safe defaults. Never hide disk-erasure confirmation or commission
-equipment during operating-system installation.
+Do not obscure the shared Home Assistant OS failure domain. Production guidance
+must include independent safeguards, UPS planning, automatic app startup,
+tested backups/restores, and replacement-host recovery. Every first start must
+remain simulator-safe and must not commission equipment.
 
 Never sacrifice reliability for convenience.
 

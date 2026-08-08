@@ -1,0 +1,27 @@
+name: AquaOS
+version: "0.1.0-dev"
+slug: aquaos
+description: Safety policy, aquarium setup, diagnostics, and control in one Home Assistant panel
+url: https://github.com/tylerkirby004-droid/AquaOS
+arch:
+  - amd64
+image: ghcr.io/tylerkirby004-droid/aquaos-addon
+startup: services
+boot: auto
+init: false
+ingress: true
+ingress_port: 8099
+ingress_entry: /admin/
+panel_icon: mdi:fishbowl-outline
+panel_title: AquaOS
+panel_admin: false
+homeassistant_api: true
+map:
+  - type: addon_config
+    read_only: false
+backup: cold
+stage: experimental
+options:
+  site_name: home-reef
+schema:
+  site_name: match(^[a-z][a-z0-9-]{0,62}$)
