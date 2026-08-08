@@ -36,6 +36,26 @@ func TestCoreAddonVersionMatchesRuntimeVersion(t *testing.T) {
 	}
 }
 
+func TestHomeAssistantWorkflowPublishesManifestImages(t *testing.T) {
+	core := readAddonManifest(t, "../../aquaos/config.yaml")
+	history := readAddonManifest(t, "../../aquaos-history/config.yaml")
+	workflow, err := os.ReadFile("../../.github/workflows/home-assistant-app.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	contents := string(workflow)
+	for _, required := range []string{
+		"BUILD_VERSION=" + core.Version,
+		core.Image + ":" + core.Version,
+		"BUILD_VERSION=" + history.Version,
+		history.Image + ":" + history.Version,
+	} {
+		if !strings.Contains(contents, required) {
+			t.Fatalf("Home Assistant workflow does not publish %q", required)
+		}
+	}
+}
+
 type addonManifest struct {
 	Image       string `yaml:"image"`
 	IngressPort int    `yaml:"ingress_port"`
