@@ -108,6 +108,10 @@ function renderServiceLinks() {
 }
 
 function renderRuntime(report) {
+	if (report.available === false) {
+		byId('runtimeStatus').innerHTML = `<div class="check fail"><strong>Core status unavailable</strong><div>${escapeHTML(report.message)}</div></div>`;
+		return;
+	}
   const health = report.health || report;
   const components = Array.isArray(health.components) ? health.components : [];
   const values = Array.isArray(report.canonicalState?.values) ? report.canonicalState.values : [];
@@ -215,10 +219,18 @@ resumeSession();
 
 byId('verify').addEventListener('click', async () => {
   try {
-    const [diagnostics, runtime] = await Promise.all([(await call('/api/verify', {method: 'POST', body: '{}'})).json(), (await call('/api/runtime')).json()]);
-    renderRuntime(runtime);
-    byId('checks').innerHTML = Object.entries(diagnostics.checks).map(([name, state]) => `<div class="check ${state}"><strong>${escapeHTML(name)}</strong><div>${state === 'pass' ? 'Passed' : 'Needs attention'}</div></div>`).join('');
-    notify('System check finished.');
+	const diagnostics = await (await call('/api/verify', {method: 'POST', body: '{}'})).json();
+	byId('checks').innerHTML = Object.entries(diagnostics.checks).map(([name, state]) => `<div class="check ${state}"><strong>${escapeHTML(name)}</strong><div>${state === 'pass' ? 'Passed' : 'Needs attention'}</div></div>`).join('');
+	try { renderRuntime(await (await call('/api/runtime')).json()); } catch (_) { /* deployment checks remain visible */ }
+	notify('System check finished.');
+  } catch (error) { notify(error.message); }
+});
+
+byId('repairCore').addEventListener('click', async () => {
+  if (!window.confirm('Restore the managed AquaOS Core service definition and restart Core? This does not activate equipment or replace configuration.')) return;
+  try {
+    await call('/api/repair', {method: 'POST', body: JSON.stringify({dryRun: false})});
+    notify('Core repair completed. Run all checks again.');
   } catch (error) { notify(error.message); }
 });
 

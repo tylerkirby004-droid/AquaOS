@@ -338,7 +338,11 @@ func (s *Server) runtime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := s.runtimeHealth.Report(r.Context())
-	s.respond(w, value, err)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"available": false, "state": "unavailable", "message": "AquaOS Core is not responding. Run the system checks and use guided repair."})
+		return
+	}
+	s.respond(w, value, nil)
 }
 func (s *Server) configuration(w http.ResponseWriter, r *http.Request) {
 	value, err := s.operations.GetConfiguration(r.Context(), actor())
@@ -400,6 +404,11 @@ func (s *Server) processEditableConfiguration(w http.ResponseWriter, r *http.Req
 }
 func (s *Server) verify(w http.ResponseWriter, r *http.Request) {
 	value, err := s.operations.Verify(r.Context(), actor())
+	if err != nil && value.Checks != nil {
+		s.logger.Warn("Admin verification found failed checks")
+		writeJSON(w, http.StatusOK, value)
+		return
+	}
 	s.respond(w, value, err)
 }
 

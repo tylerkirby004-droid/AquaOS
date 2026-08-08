@@ -240,7 +240,7 @@ func (s *Service) Verify(ctx context.Context, actor Actor) (Diagnostics, error) 
 	if err != nil {
 		return Diagnostics{}, err
 	}
-	checks := map[string]string{"platform": "fail", "binary": "fail", "configuration": "fail", "systemd": "fail"}
+	checks := map[string]string{"platform": "fail", "binary": "fail", "configuration": "fail", "systemd": "fail", "service": "fail"}
 	if status.Platform == "linux/amd64" {
 		checks["platform"] = "pass"
 	}
@@ -249,6 +249,9 @@ func (s *Service) Verify(ctx context.Context, actor Actor) (Diagnostics, error) 
 	}
 	if status.ServiceUnit {
 		checks["systemd"] = "pass"
+	}
+	if s.host.Run(ctx, "systemctl", "is-active", "--quiet", "aquaos.service") == nil {
+		checks["service"] = "pass"
 	}
 	digest := ""
 	payload, readErr := s.host.ReadFile(configPath)

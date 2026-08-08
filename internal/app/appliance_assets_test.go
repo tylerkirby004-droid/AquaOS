@@ -12,7 +12,7 @@ func TestApplianceInstallerPreservesCriticalBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(payload)
-	for _, required := range []string{"refusing to install on a hypervisor host", "aquaosctl-linux-amd64\" install", "--dry-run", "CPUWeight=100", "aquaos.service", "ack-independent-safeguards"} {
+	for _, required := range []string{"refusing to install on a hypervisor host", "aquaosctl-linux-amd64\" install", "--dry-run", "CPUWeight=100", "aquaos.service", "ack-independent-safeguards", "chown root:aquaos /etc/aquaos/aquaos.yaml", "usermod -aG sudo", "/api/v1/health", "installation will not report success"} {
 		if !strings.Contains(text, required) {
 			t.Fatalf("installer is missing safety control %q", required)
 		}

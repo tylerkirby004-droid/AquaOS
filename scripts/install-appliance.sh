@@ -113,6 +113,9 @@ EOF
 fi
 apt-get update
 apt-get install -y --no-install-recommends docker.io docker-compose openssl ca-certificates sudo
+recovery_user=$(getent passwd 1000 | cut -d: -f1)
+case "$recovery_user" in *[!A-Za-z0-9._-]*|'') echo "the Debian recovery account could not be identified" >&2; exit 1;; esac
+usermod -aG sudo "$recovery_user"
 systemctl enable --now docker
 profile=standard
 if [ "$advanced_history" = true ]; then profile=advanced-history; fi
@@ -150,6 +153,8 @@ for artifact in aquaos-admin-linux-amd64 aquaos-ha-config-linux-amd64; do
 done
 "$release/aquaosctl-linux-amd64" install --binary "$release/aquaos-linux-amd64" --config /tmp/aquaos-appliance.yaml --version "$version" --sha256 "$checksum" --signature "$release/aquaos-linux-amd64.sig.hex" --public-key "$release/aquaos-ed25519-public-key.hex" --ack-dedicated-host --dry-run
 "$release/aquaosctl-linux-amd64" install --binary "$release/aquaos-linux-amd64" --config /tmp/aquaos-appliance.yaml --version "$version" --sha256 "$checksum" --signature "$release/aquaos-linux-amd64.sig.hex" --public-key "$release/aquaos-ed25519-public-key.hex" --ack-dedicated-host
+chown root:aquaos /etc/aquaos/aquaos.yaml
+chmod 0640 /etc/aquaos/aquaos.yaml
 install -m 0755 "$release/aquaosctl-linux-amd64" /opt/aquaos/bin/aquaosctl
 install -m 0755 "$release/aquaos-admin-linux-amd64" /opt/aquaos/bin/aquaos-admin
 install -m 0755 "$release/aquaos-ha-config-linux-amd64" /opt/aquaos/bin/aquaos-ha-config
@@ -224,6 +229,22 @@ systemctl daemon-reload
 systemctl enable --now aquaos-admin.service aquaos-homeassistant-dashboard.path
 systemctl restart aquaos.service docker.service
 /opt/aquaos/bin/aquaosctl verify
+core_ready=false
+attempt=0
+while [ "$attempt" -lt 30 ]; do
+  if curl --fail --silent --show-error --max-time 2 http://127.0.0.1:8080/health/live >/dev/null && \
+     curl --fail --silent --show-error --max-time 2 -H "Authorization: Bearer $api_token" http://127.0.0.1:8080/api/v1/health >/dev/null; then
+    core_ready=true
+    break
+  fi
+  attempt=$((attempt + 1))
+  sleep 1
+done
+if [ "$core_ready" != true ]; then
+  echo "AquaOS Core did not become ready; installation will not report success" >&2
+  systemctl status aquaos.service --no-pager -l >&2 || true
+  exit 1
+fi
 
 umask 077
 {
