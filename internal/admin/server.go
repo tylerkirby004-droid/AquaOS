@@ -448,7 +448,7 @@ func (s *Server) homeAssistantDevices(w http.ResponseWriter, r *http.Request) {
 	value, err := s.homeAssistant.Devices(r.Context())
 	if err != nil {
 		s.logger.Warn("Home Assistant inventory request failed", "error", err)
-		writeProblem(w, http.StatusBadGateway, "home_assistant_inventory_failed", err.Error())
+		writeProblem(w, http.StatusBadRequest, "home_assistant_inventory_failed", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, value)
@@ -471,7 +471,7 @@ func (s *Server) setupHistory(w http.ResponseWriter, r *http.Request) {
 	value, err := s.advancedHistory.SetupHistory(r.Context())
 	if err != nil {
 		s.logger.Warn("Advanced history setup failed", "error", err)
-		writeProblem(w, http.StatusBadGateway, "history_setup_failed", err.Error())
+		writeProblem(w, http.StatusBadRequest, "history_setup_failed", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, value)

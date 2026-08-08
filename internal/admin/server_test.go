@@ -163,6 +163,10 @@ func TestEmbeddedAdminUIAcceptsAndClearsFirstBootHandoff(t *testing.T) {
 			t.Fatalf("Admin UI dark theme is missing neutral color %q", color)
 		}
 	}
+	overrides, err := assets.ReadFile("web/overrides.css")
+	if err != nil || !strings.Contains(string(overrides), "[hidden]") || !strings.Contains(string(overrides), "!important") {
+		t.Fatal("Admin UI must never display hidden implementation fields")
+	}
 }
 
 func TestAdminPairingCreatesPersistentProtectedSession(t *testing.T) {

@@ -402,6 +402,7 @@ function importHomeAssistantDevice(device) {
   });
   renderInventory();
   renderAlarms();
+  renderHomeAssistantDevices();
   markChanged();
   notify('Imported from Home Assistant. Shelly electrical protections are monitored automatically after commissioning; outputs remain off until then.');
 }
@@ -417,7 +418,8 @@ function renderHomeAssistantDevices() {
   target.innerHTML = visibleDevices.map(device => {
     const index = homeAssistantDevices.indexOf(device);
     const entities = device.entities.filter(entity => !entity.disabled).slice(0, 6).map(entity => entity.name || entity.entityId).join(', ');
-    return `<div class="ha-device"><div><strong>${escapeHTML(device.name || 'Unnamed device')}</strong><div class="help">${escapeHTML([device.manufacturer, device.model, device.areaId].filter(Boolean).join(' · ') || 'No manufacturer or room information')}</div><div>${escapeHTML(entities || 'No available sensors or switches')}</div></div><button data-import-ha-device="${index}">Add its sensors and outlets</button></div>`;
+    const imported = editable.configuration.inventory.devices.some(item => item.metadata?.homeAssistantDeviceId === device.id);
+    return `<div class="ha-device"><div><strong>${escapeHTML(device.name || 'Unnamed device')}</strong><div class="help">${escapeHTML([device.manufacturer, device.model, device.areaId].filter(Boolean).join(' · ') || 'No manufacturer or room information')}</div><div>${escapeHTML(entities || 'No available sensors or switches')}</div></div><button data-import-ha-device="${index}" ${imported ? 'disabled' : ''}>${imported ? 'Added to AquaOS' : 'Add its sensors and outlets'}</button></div>`;
   }).join('');
 }
 
@@ -433,11 +435,13 @@ byId('loadHADevices').addEventListener('click', async () => {
   }
 });
 
-byId('deviceForm').addEventListener('submit', event => { event.preventDefault(); try { addInventory('devices', {id: byId('deviceId').value}); event.target.reset(); } catch (error) { notify(error.message); } });
-byId('sensorForm').addEventListener('submit', event => { event.preventDefault(); try { const calibrated = byId('calibrationEnabled').checked; addInventory('sensors', {id: byId('sensorId').value, entityId: uuid(), name: byId('sensorName').value.trim(), deviceId: byId('sensorDevice').value, quantity: byId('sensorUnit').value === 'boolean' ? 'boolean' : 'measurement', unit: byId('sensorUnit').value, calibration: {enabled: calibrated, scale: Number(byId('calibrationScale').value), offset: Number(byId('calibrationOffset').value), reference: calibrated ? byId('calibrationReference').value.trim() : '', calibratedBy: calibrated ? 'admin-gui-operator' : '', calibratedAt: calibrated ? new Date().toISOString() : '0001-01-01T00:00:00Z'}}); event.target.reset(); renderAlarms(); } catch (error) { notify(error.message); } });
+byId('deviceForm').addEventListener('submit', event => { event.preventDefault(); try { const name = byId('deviceId').value.trim(); addInventory('devices', {id: shortID(name, 'device'), name}); event.target.reset(); } catch (error) { notify(error.message); } });
+byId('sensorForm').addEventListener('submit', event => { event.preventDefault(); try { const calibrated = byId('calibrationEnabled').checked; const name = byId('sensorName').value.trim(); addInventory('sensors', {id: byId('sensorId').value || shortID(name, 'sensor'), entityId: uuid(), name, deviceId: byId('sensorDevice').value, quantity: byId('sensorUnit').value === 'boolean' ? 'boolean' : 'measurement', unit: byId('sensorUnit').value, calibration: {enabled: calibrated, scale: Number(byId('calibrationScale').value), offset: Number(byId('calibrationOffset').value), reference: calibrated ? byId('calibrationReference').value.trim() : '', calibratedBy: calibrated ? 'admin-gui-operator' : '', calibratedAt: calibrated ? new Date().toISOString() : '0001-01-01T00:00:00Z'}}); event.target.reset(); renderAlarms(); } catch (error) { notify(error.message); } });
+byId('equipmentName').addEventListener('input', () => { if (!editingEquipmentID) byId('equipmentId').value = shortID(byId('equipmentName').value, 'equipment'); });
 byId('equipmentForm').addEventListener('submit', event => { event.preventDefault(); try { const kind = byId('equipmentKind').value; const hazardous = ['heater', 'ato', 'dosing-pump'].includes(kind); const requiredSensorIds = byId('requiredSensors').value.split(',').map(value => value.trim()).filter(Boolean); const existing = editingEquipmentID ? editable.configuration.inventory.equipment.find(value => value.id === editingEquipmentID) : null; const value = {id: byId('equipmentId').value.trim(), entityId: existing?.entityId || uuid(), name: byId('equipmentName').value.trim(), deviceId: byId('equipmentDevice').value, kind, capabilities: ['switch', 'command-acknowledgement', 'reported-state'], hazardous, failSafeOn: false, maximumOn: duration(byId('maximumOn').value, !hazardous), maximumDailyOn: duration(byId('maximumDaily').value, kind !== 'dosing-pump'), minimumOff: duration(byId('minimumOff').value), requiredSensorIds, commissioning: existing?.commissioning || {stage: 'uncommissioned'}}; if (existing) { const index = editable.configuration.inventory.equipment.indexOf(existing); editable.configuration.inventory.equipment[index] = value; const endpoint = editable.configuration.adapters.shelly.endpoints.find(item => item.equipmentId === value.entityId); if (endpoint) { endpoint.equipmentKind = kind === 'heater' ? 'heater' : 'outlet'; endpoint.maximumOn = value.maximumOn; endpoint.requiredProbeIds = requiredSensorIds.map(sensorID => editable.configuration.inventory.sensors.find(sensor => sensor.id === sensorID)?.entityId).filter(Boolean); } editingEquipmentID = ''; event.submitter.textContent = 'Add equipment'; renderInventory(); markChanged(); } else { addInventory('equipment', value); } event.target.reset(); } catch (error) { notify(error.message); } });
 byId('checkInventory').addEventListener('click', async () => { try { await saveConfiguration(); notify('Equipment and sensors saved.'); } catch (error) { notify(error.message); } });
 
+byId('alarmName').addEventListener('input', () => { if (!editingAlarmID) byId('alarmId').value = shortID(`${byId('alarmName').value} alarm`, 'alarm'); });
 byId('alarmForm').addEventListener('submit', event => {
   event.preventDefault();
   try {

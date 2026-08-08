@@ -14,7 +14,7 @@ fi
 ln -sf /config/aquaos.yaml /etc/aquaos/aquaos.yaml
 ln -sf /config/api.token /etc/aquaos/secrets/api.token
 if [[ -f /config/influxdb.token ]]; then ln -sf /config/influxdb.token /etc/aquaos/secrets/influxdb.token; fi
-printf '%s\n' '0.2.3' > /var/lib/aquaos/current-version
+printf '%s\n' '0.2.4' > /var/lib/aquaos/current-version
 printf '%s\n' '[Unit]' 'Description=AquaOS Core (managed by Home Assistant Supervisor)' > /etc/systemd/system/aquaos.service
 
 core_loop() {
