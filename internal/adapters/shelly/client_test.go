@@ -15,7 +15,7 @@ func TestHTTPClientSwitchContractsAndSchemaVariation(t *testing.T) {
 		methods = append(methods, request.URL.Path)
 		writer.Header().Set("Content-Type", "application/json")
 		if strings.HasSuffix(request.URL.Path, "GetStatus") {
-			_, _ = writer.Write([]byte(`{"id":0,"source":"HTTP_in","output":true,"apower":41.2,"voltage":120.1,"current":0.34,"future_field":{"ignored":true}}`))
+			_, _ = writer.Write([]byte(`{"id":0,"source":"HTTP_in","output":true,"apower":41.2,"voltage":120.1,"current":0.34,"errors":["overvoltage"],"future_field":{"ignored":true}}`))
 			return
 		}
 		if strings.HasSuffix(request.URL.Path, "GetConfig") {
@@ -34,7 +34,7 @@ func TestHTTPClientSwitchContractsAndSchemaVariation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !status.Output || status.APower != 41.2 || status.Source != "HTTP_in" {
+	if !status.Output || status.APower != 41.2 || status.Source != "HTTP_in" || len(status.Errors) != 1 || status.Errors[0] != "overvoltage" {
 		t.Fatalf("unexpected status: %+v", status)
 	}
 	if _, err := client.SetSwitch(context.Background(), server.URL, 0, true); err != nil {

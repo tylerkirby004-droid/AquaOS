@@ -49,6 +49,7 @@ type Report struct {
 	ObservedAt  time.Time
 	DesiredOn   *bool
 	Pending     bool
+	Errors      []string
 }
 
 // ReportedSink accepts device observations for canonical-state and policy
@@ -244,7 +245,7 @@ func (a *Adapter) poll(ctx context.Context, endpoint Endpoint) {
 	if hasDesired {
 		desiredPointer = &desired
 	}
-	if err := a.reports.ReportShelly(ctx, Report{EndpointID: endpoint.ID, EquipmentID: endpoint.EquipmentID, On: status.Output, APower: status.APower, Voltage: status.Voltage, Current: status.Current, Source: status.Source, ObservedAt: now, DesiredOn: desiredPointer, Pending: hasPending}); err != nil {
+	if err := a.reports.ReportShelly(ctx, Report{EndpointID: endpoint.ID, EquipmentID: endpoint.EquipmentID, On: status.Output, APower: status.APower, Voltage: status.Voltage, Current: status.Current, Source: status.Source, ObservedAt: now, DesiredOn: desiredPointer, Pending: hasPending, Errors: append([]string(nil), status.Errors...)}); err != nil {
 		a.logger.ErrorContext(ctx, "Shelly report rejected", "code", "shelly.report_rejected", "endpoint_id", endpoint.ID, "error", err)
 	}
 	a.mu.RLock()

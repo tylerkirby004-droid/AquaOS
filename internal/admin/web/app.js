@@ -393,13 +393,17 @@ function importHomeAssistantDevice(device) {
       return;
     }
     if (entity.entityId.startsWith('switch.') && !inventory.equipment.some(item => item.id === entityKey)) {
-      inventory.equipment.push({id: entityKey, entityId: uuid(), deviceId: deviceID, name: entity.name || entity.entityId, kind: 'outlet', capabilities: ['switch', 'reported-state'], hazardous: false, failSafeOn: false, maximumOn: 0, maximumDailyOn: 0, minimumOff: 0, commissioning: {stage: 'discovered'}});
+      const equipmentEntityID = uuid();
+      inventory.equipment.push({id: entityKey, entityId: equipmentEntityID, deviceId: deviceID, name: entity.name || entity.entityId, kind: 'outlet', capabilities: ['switch', 'reported-state'], hazardous: false, failSafeOn: false, maximumOn: 0, maximumDailyOn: 0, minimumOff: 0, commissioning: {stage: 'discovered'}});
+      if (String(device.manufacturer || '').toLowerCase().includes('shelly') && /^http:\/\/[^/?#]+\/?$/i.test(device.configurationUrl || '')) {
+        editable.configuration.adapters.shelly.endpoints.push({id: uuid(), equipmentId: equipmentEntityID, alarmRuleId: uuid(), baseUrl: device.configurationUrl.replace(/\/$/, ''), channel: 0, pollInterval: 5e9, requestTimeout: 2e9, retries: 1, safeOn: false, powerReturnPolicy: 'off', equipmentKind: 'outlet', maximumOn: 0, requiredProbeIds: []});
+      }
     }
   });
   renderInventory();
   renderAlarms();
   markChanged();
-  notify('Imported from Home Assistant. Outputs remain uncommissioned and cannot activate yet.');
+  notify('Imported from Home Assistant. Shelly electrical protections are monitored automatically after commissioning; outputs remain off until then.');
 }
 
 function renderHomeAssistantDevices() {

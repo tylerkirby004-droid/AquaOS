@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -95,7 +96,7 @@ func NewCoordinator(stateWriter StateWriter, alarmEngine AlarmEngine, commander 
 func (c *Coordinator) RegisterRules(ctx context.Context) error {
 	for id, ruleID := range c.shellyRules {
 		endpoint := c.shellyEndpoints[id]
-		rule := alarms.Rule{ID: ruleID, Code: "shelly.adapter_unavailable", Name: "Shelly adapter unavailable", Subject: alarms.Subject{Kind: "equipment", ID: domain.EntityID(endpoint.EquipmentID)}, Severity: events.SeverityCritical, Latching: true}
+		rule := alarms.Rule{ID: ruleID, Code: "shelly.protection_or_connection_fault", Name: "Shelly protection or connection fault", Subject: alarms.Subject{Kind: "equipment", ID: domain.EntityID(endpoint.EquipmentID)}, Severity: events.SeverityCritical, Latching: true}
 		if err := c.alarms.RegisterRule(ctx, rule); err != nil {
 			return fmt.Errorf("register Shelly alarm: %w", err)
 		}
@@ -144,6 +145,9 @@ func (c *Coordinator) ReportShelly(ctx context.Context, report shelly.Report) er
 			return err
 		}
 	}
+	if len(report.Errors) > 0 {
+		return c.ShellyFailure(ctx, endpoint, true, "shelly.protection."+strings.Join(report.Errors, "+"), report.ObservedAt)
+	}
 	desired := endpoint.SafeOn
 	if report.DesiredOn != nil {
 		desired = *report.DesiredOn
@@ -173,7 +177,7 @@ func (c *Coordinator) ShellyFailure(ctx context.Context, endpoint shelly.Endpoin
 	if !exists {
 		return errors.New("unknown Shelly failure endpoint")
 	}
-	observation := alarms.Observation{RuleID: ruleID, Active: active, ObservedAt: observedAt, Evidence: alarms.Evidence{Code: reason, Message: "Shelly reported-state path unavailable"}}
+	observation := alarms.Observation{RuleID: ruleID, Active: active, ObservedAt: observedAt, Evidence: alarms.Evidence{Code: reason, Message: "Shelly reported a protection or connection fault"}}
 	_, _, alarmErr := c.alarms.Observe(ctx, observation)
 	c.mu.Lock()
 	wasActive := c.shellyActive[endpoint.ID]

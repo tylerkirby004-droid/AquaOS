@@ -17,13 +17,14 @@ const maximumResponseBytes = 64 * 1024
 // SwitchStatus is the supported boundary subset of Switch.GetStatus. Unknown
 // additive firmware fields are deliberately ignored.
 type SwitchStatus struct {
-	ID      int     `json:"id"`
-	Source  string  `json:"source"`
-	Output  bool    `json:"output"`
-	APower  float64 `json:"apower"`
-	Voltage float64 `json:"voltage"`
-	Current float64 `json:"current"`
-	Uptime  uint64  `json:"-"`
+	ID      int      `json:"id"`
+	Source  string   `json:"source"`
+	Output  bool     `json:"output"`
+	APower  float64  `json:"apower"`
+	Voltage float64  `json:"voltage"`
+	Current float64  `json:"current"`
+	Errors  []string `json:"errors"`
+	Uptime  uint64   `json:"-"`
 }
 
 // SetResult is the supported Switch.Set response.
