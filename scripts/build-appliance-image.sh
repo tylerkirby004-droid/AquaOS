@@ -43,4 +43,9 @@ lb build
 image="$output/aquaos-$AQUAOS_VERSION-amd64.iso"
 cp live-image-amd64.hybrid.iso "$image"
 sha256sum "$image" > "$image.sha256"
+if [ -n "${SUDO_UID:-}" ] && [ -n "${SUDO_GID:-}" ]; then
+  case "$SUDO_UID" in *[!0-9]*|'') echo "invalid invoking-user UID" >&2; exit 1;; esac
+  case "$SUDO_GID" in *[!0-9]*|'') echo "invalid invoking-user GID" >&2; exit 1;; esac
+  chown -R "$SUDO_UID:$SUDO_GID" "$output"
+fi
 echo "Created $image"
