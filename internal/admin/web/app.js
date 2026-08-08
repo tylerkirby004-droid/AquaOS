@@ -182,8 +182,9 @@ byId('setupHistory').addEventListener('click', async () => {
     editable.influxdbTokenFile = status.tokenFile;
     fillForm();
     markChanged();
+    await saveConfiguration();
     renderHistoryStatus(status);
-    notify('Advanced trends are running. Continue through Safety review to apply the generated connection to AquaOS.');
+    notify('InfluxDB and Grafana are installed, connected, and ready.');
   } catch (error) {
     byId('advancedHistoryStatus').innerHTML = `<strong>Setup failed:</strong> ${escapeHTML(error.message)}`;
   } finally {
@@ -323,7 +324,7 @@ byId('repairCore').addEventListener('click', async () => {
 });
 
 byId('saveServices').addEventListener('click', async () => {
-  try { collectServices(); await validateCandidate(); notify('Service settings are valid.'); showView('discovery'); } catch (error) { notify(error.message); }
+  try { collectServices(); showView('discovery'); } catch (error) { notify(error.message); }
 });
 
 byId('discoveryForm').addEventListener('submit', async event => {
@@ -403,12 +404,20 @@ function importHomeAssistantDevice(device) {
 
 function renderHomeAssistantDevices() {
   const target = byId('haDeviceResults');
-  if (!homeAssistantDevices.length) {
+  const query = byId('haDeviceFilter').value.trim().toLowerCase();
+  const visibleDevices = homeAssistantDevices.filter(device => [device.name, device.manufacturer, device.model, device.areaId].some(value => String(value || '').toLowerCase().includes(query)));
+  if (!visibleDevices.length) {
     target.innerHTML = '<p class="empty">Home Assistant returned no registered devices.</p>';
     return;
   }
-  target.innerHTML = homeAssistantDevices.map((device, index) => `<div class="ha-device"><div><strong>${escapeHTML(device.name || 'Unnamed device')}</strong><div class="help">${escapeHTML([device.manufacturer, device.model, device.areaId].filter(Boolean).join(' · ') || 'No manufacturer or area information')}</div><div>${device.entities.length} ${device.entities.length === 1 ? 'entity' : 'entities'}</div></div><button data-import-ha-device="${index}">Add to AquaOS</button></div>`).join('');
+  target.innerHTML = visibleDevices.map(device => {
+    const index = homeAssistantDevices.indexOf(device);
+    const entities = device.entities.filter(entity => !entity.disabled).slice(0, 6).map(entity => entity.name || entity.entityId).join(', ');
+    return `<div class="ha-device"><div><strong>${escapeHTML(device.name || 'Unnamed device')}</strong><div class="help">${escapeHTML([device.manufacturer, device.model, device.areaId].filter(Boolean).join(' · ') || 'No manufacturer or room information')}</div><div>${escapeHTML(entities || 'No available sensors or switches')}</div></div><button data-import-ha-device="${index}">Add its sensors and outlets</button></div>`;
+  }).join('');
 }
+
+byId('haDeviceFilter').addEventListener('input', renderHomeAssistantDevices);
 
 byId('loadHADevices').addEventListener('click', async () => {
   try {
@@ -423,7 +432,7 @@ byId('loadHADevices').addEventListener('click', async () => {
 byId('deviceForm').addEventListener('submit', event => { event.preventDefault(); try { addInventory('devices', {id: byId('deviceId').value}); event.target.reset(); } catch (error) { notify(error.message); } });
 byId('sensorForm').addEventListener('submit', event => { event.preventDefault(); try { const calibrated = byId('calibrationEnabled').checked; addInventory('sensors', {id: byId('sensorId').value, entityId: uuid(), name: byId('sensorName').value.trim(), deviceId: byId('sensorDevice').value, quantity: byId('sensorUnit').value === 'boolean' ? 'boolean' : 'measurement', unit: byId('sensorUnit').value, calibration: {enabled: calibrated, scale: Number(byId('calibrationScale').value), offset: Number(byId('calibrationOffset').value), reference: calibrated ? byId('calibrationReference').value.trim() : '', calibratedBy: calibrated ? 'admin-gui-operator' : '', calibratedAt: calibrated ? new Date().toISOString() : '0001-01-01T00:00:00Z'}}); event.target.reset(); renderAlarms(); } catch (error) { notify(error.message); } });
 byId('equipmentForm').addEventListener('submit', event => { event.preventDefault(); try { const kind = byId('equipmentKind').value; const hazardous = ['heater', 'ato', 'dosing-pump'].includes(kind); const requiredSensorIds = byId('requiredSensors').value.split(',').map(value => value.trim()).filter(Boolean); const existing = editingEquipmentID ? editable.configuration.inventory.equipment.find(value => value.id === editingEquipmentID) : null; const value = {id: byId('equipmentId').value.trim(), entityId: existing?.entityId || uuid(), name: byId('equipmentName').value.trim(), deviceId: byId('equipmentDevice').value, kind, capabilities: ['switch', 'command-acknowledgement', 'reported-state'], hazardous, failSafeOn: false, maximumOn: duration(byId('maximumOn').value, !hazardous), maximumDailyOn: duration(byId('maximumDaily').value, kind !== 'dosing-pump'), minimumOff: duration(byId('minimumOff').value), requiredSensorIds, commissioning: existing?.commissioning || {stage: 'uncommissioned'}}; if (existing) { const index = editable.configuration.inventory.equipment.indexOf(existing); editable.configuration.inventory.equipment[index] = value; const endpoint = editable.configuration.adapters.shelly.endpoints.find(item => item.equipmentId === value.entityId); if (endpoint) { endpoint.equipmentKind = kind === 'heater' ? 'heater' : 'outlet'; endpoint.maximumOn = value.maximumOn; endpoint.requiredProbeIds = requiredSensorIds.map(sensorID => editable.configuration.inventory.sensors.find(sensor => sensor.id === sensorID)?.entityId).filter(Boolean); } editingEquipmentID = ''; event.submitter.textContent = 'Add equipment'; renderInventory(); markChanged(); } else { addInventory('equipment', value); } event.target.reset(); } catch (error) { notify(error.message); } });
-byId('checkInventory').addEventListener('click', async () => { try { await validateCandidate(); showView('safety'); } catch (error) { notify(error.message); } });
+byId('checkInventory').addEventListener('click', async () => { try { await saveConfiguration(); notify('Equipment and sensors saved.'); } catch (error) { notify(error.message); } });
 
 byId('alarmForm').addEventListener('submit', event => {
   event.preventDefault();
@@ -563,21 +572,21 @@ async function validateCandidate() {
   const response = await call('/api/config/editable/validate', {method: 'POST', body: JSON.stringify(editable)});
   const validation = await response.json();
   validatedDigest = validation.digest;
-  byId('apply').disabled = !byId('understand').checked;
   updatePreview();
   return validation;
 }
 
-byId('understand').addEventListener('change', () => { byId('apply').disabled = !(byId('understand').checked && validatedDigest); });
-byId('validate').addEventListener('click', async () => { try { const value = await validateCandidate(); notify(`Configuration passed validation (${value.digest.slice(0, 12)}…).`); } catch (error) { notify(error.message); } });
-byId('apply').addEventListener('click', async () => {
+async function saveConfiguration() {
+  await validateCandidate();
+  const value = await (await call('/api/config/editable/apply', {method: 'POST', body: JSON.stringify(editable)})).json();
+  validatedDigest = '';
+  return value;
+}
+
+byId('saveSetup').addEventListener('click', async () => {
   try {
-    if (!validatedDigest || !byId('understand').checked) throw new Error('Validate and acknowledge the safety review first.');
-    if (!window.confirm('Apply this validated configuration? AquaOS may need to restart before changes take effect.')) return;
-    const value = await (await call('/api/config/editable/apply', {method: 'POST', body: JSON.stringify(editable)})).json();
-    notify(value.restartRequired ? 'Saved. Restart AquaOS to activate the changes.' : 'Configuration applied.');
-    validatedDigest = '';
-    byId('apply').disabled = true;
+    const value = await saveConfiguration();
+    notify(value.restartRequired ? 'Setup saved. Restart AquaOS when prompted.' : 'AquaOS setup saved.');
   } catch (error) { notify(error.message); }
 });
 

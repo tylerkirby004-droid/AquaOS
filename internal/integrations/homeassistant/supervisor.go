@@ -101,7 +101,16 @@ func (c *SupervisorClient) SetupHistory(ctx context.Context) (HistoryStatus, err
 	if err != nil {
 		return HistoryStatus{}, err
 	}
-	options := map[string]any{"options": map[string]string{"influx_token": token, "influx_admin_password": password}}
+	options := map[string]any{"options": map[string]any{
+		"plugins":               []string{},
+		"custom_plugins":        []any{},
+		"env_vars":              []any{},
+		"ssl":                   false,
+		"certfile":              "fullchain.pem",
+		"keyfile":               "privkey.pem",
+		"influx_token":          token,
+		"influx_admin_password": password,
+	}}
 	status, err := c.request(ctx, http.MethodPost, "/addons/"+historySlug+"/options", options, nil)
 	if err != nil {
 		return HistoryStatus{}, fmt.Errorf("configure AquaOS Advanced Trends: %w", err)

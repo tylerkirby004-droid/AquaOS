@@ -46,10 +46,13 @@ func TestSupervisorClientInstallsHistoryWithoutExposingCredentials(t *testing.T)
 			writeSupervisorResponse(w, nil)
 		case "POST /addons/265912a1_aquaos_history/options":
 			var payload struct {
-				Options map[string]string `json:"options"`
+				Options map[string]any `json:"options"`
 			}
 			_ = json.NewDecoder(r.Body).Decode(&payload)
-			configured = len(payload.Options["influx_token"]) >= 48 && len(payload.Options["influx_admin_password"]) >= 24
+			token, tokenOK := payload.Options["influx_token"].(string)
+			password, passwordOK := payload.Options["influx_admin_password"].(string)
+			_, envOK := payload.Options["env_vars"].([]any)
+			configured = tokenOK && passwordOK && envOK && len(token) >= 48 && len(password) >= 24
 			writeSupervisorResponse(w, nil)
 		case "POST /addons/265912a1_aquaos_history/start":
 			started = true
