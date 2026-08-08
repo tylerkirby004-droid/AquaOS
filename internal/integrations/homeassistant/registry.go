@@ -48,7 +48,7 @@ type RegistryClient struct {
 // NewRegistryClient constructs a bounded, read-only Home Assistant client.
 func NewRegistryClient(url, token string, timeout time.Duration) (*RegistryClient, error) {
 	if strings.TrimSpace(url) == "" || strings.TrimSpace(token) == "" || timeout <= 0 {
-		return nil, errors.New("Home Assistant WebSocket URL, token, and timeout are required")
+		return nil, errors.New("home assistant WebSocket URL, token, and timeout are required")
 	}
 	return &RegistryClient{url: url, token: token, timeout: timeout, dialer: &websocket.Dialer{HandshakeTimeout: timeout, Proxy: http.ProxyFromEnvironment}}, nil
 }
@@ -69,13 +69,13 @@ func (c *RegistryClient) Devices(ctx context.Context) ([]RegistryDevice, error) 
 		Type string `json:"type"`
 	}
 	if err = connection.ReadJSON(&phase); err != nil || phase.Type != "auth_required" {
-		return nil, errors.New("Home Assistant did not request WebSocket authentication")
+		return nil, errors.New("home assistant did not request WebSocket authentication")
 	}
 	if err = connection.WriteJSON(map[string]string{"type": "auth", "access_token": c.token}); err != nil {
 		return nil, fmt.Errorf("authenticate Home Assistant registry: %w", err)
 	}
 	if err = connection.ReadJSON(&phase); err != nil || phase.Type != "auth_ok" {
-		return nil, errors.New("Home Assistant rejected registry authentication")
+		return nil, errors.New("home assistant rejected registry authentication")
 	}
 
 	var devices []registryDevice
@@ -110,7 +110,7 @@ func (*RegistryClient) command(connection *websocket.Conn, id int, kind string, 
 		return fmt.Errorf("read Home Assistant %s: %w", kind, err)
 	}
 	if response.ID != id || response.Type != "result" || !response.Success {
-		return fmt.Errorf("Home Assistant %s failed: %s", kind, response.Error.Message)
+		return fmt.Errorf("home assistant %s failed: %s", kind, response.Error.Message)
 	}
 	if err := json.Unmarshal(response.Result, target); err != nil {
 		return fmt.Errorf("decode Home Assistant %s: %w", kind, err)

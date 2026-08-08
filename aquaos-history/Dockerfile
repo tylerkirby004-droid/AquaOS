@@ -8,8 +8,8 @@ LABEL io.hass.version="${BUILD_VERSION}" \
       io.hass.arch="${BUILD_ARCH}" \
       org.opencontainers.image.title="AquaOS Advanced Trends" \
       org.opencontainers.image.source="https://github.com/tylerkirby004-droid/AquaOS"
-COPY --from=influxdb /usr/bin/influxd /usr/local/bin/influxd
-COPY --from=influxdb /usr/bin/influx /usr/local/bin/influx
+COPY --from=influxdb /usr/local/bin/influxd /usr/local/bin/influxd
+COPY --from=influxdb /usr/local/bin/influx /usr/local/bin/influx
 COPY aquaos-history/rootfs /
 COPY aquaos-history/dashboards /opt/aquaos/dashboards
 RUN chmod 0755 /etc/s6-overlay/s6-rc.d/influxdb/run /etc/s6-overlay/s6-rc.d/init-aquaos-history/run

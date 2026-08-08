@@ -43,7 +43,7 @@ type SupervisorClient struct {
 // NewSupervisorClient constructs a Home Assistant Supervisor client.
 func NewSupervisorClient(baseURL, token, secretPath, coreSecretPath string, timeout time.Duration) (*SupervisorClient, error) {
 	if strings.TrimSpace(baseURL) == "" || strings.TrimSpace(token) == "" || strings.TrimSpace(secretPath) == "" || strings.TrimSpace(coreSecretPath) == "" || timeout <= 0 {
-		return nil, errors.New("Supervisor URL, token, secret paths, and timeout are required")
+		return nil, errors.New("supervisor URL, token, secret paths, and timeout are required")
 	}
 	return &SupervisorClient{baseURL: strings.TrimRight(baseURL, "/"), token: token, secretPath: secretPath, coreSecretPath: coreSecretPath, client: &http.Client{Transport: &http.Transport{Proxy: nil}, Timeout: timeout}}, nil
 }
@@ -133,7 +133,7 @@ func (c *SupervisorClient) historySlug(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("resolve AquaOS companion app identifier: %w", err)
 	}
 	if status != http.StatusOK || !strings.HasSuffix(info.Slug, "_aquaos") {
-		return "", errors.New("Supervisor returned an invalid AquaOS app identifier")
+		return "", errors.New("supervisor returned an invalid AquaOS app identifier")
 	}
 	return strings.TrimSuffix(info.Slug, "_aquaos") + "_aquaos_history", nil
 }
@@ -167,10 +167,10 @@ func (c *SupervisorClient) request(ctx context.Context, method, path string, pay
 		Message string          `json:"message"`
 	}
 	if err = json.NewDecoder(io.LimitReader(response.Body, 2*1024*1024)).Decode(&envelope); err != nil && response.StatusCode >= 400 {
-		return response.StatusCode, fmt.Errorf("Supervisor returned HTTP %d", response.StatusCode)
+		return response.StatusCode, fmt.Errorf("supervisor returned HTTP %d", response.StatusCode)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 || envelope.Result == "error" {
-		return response.StatusCode, fmt.Errorf("Supervisor returned HTTP %d: %s", response.StatusCode, envelope.Message)
+		return response.StatusCode, fmt.Errorf("supervisor returned HTTP %d: %s", response.StatusCode, envelope.Message)
 	}
 	if target != nil && len(envelope.Data) > 0 {
 		if err = json.Unmarshal(envelope.Data, target); err != nil {
