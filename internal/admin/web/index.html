@@ -9,7 +9,7 @@
 <body>
   <header class="topbar">
     <div><span class="brand-mark">A</span><strong>AquaOS</strong><span class="subtle">Administration</span></div>
-    <span id="connection" class="status disconnected">Not connected</span>
+    <div><span id="connection" class="status disconnected">Not connected</span> <button id="signout" hidden>Unpair browser</button></div>
   </header>
   <div class="shell">
     <nav aria-label="Administration sections">
@@ -28,9 +28,9 @@
         <h1>Let’s set up your aquarium</h1>
         <p class="lede">This assistant uses plain-language choices and checks every change before AquaOS accepts it. Nothing on this page directly switches physical equipment.</p>
         <div class="card warning"><strong>Before continuing</strong><p>Keep heaters, dosing pumps, and top-off equipment disconnected or connected only to a safe test load until the commissioning checks pass.</p></div>
-        <label for="token">Administrator access code</label>
-        <div class="inline"><input id="token" type="password" autocomplete="current-password" placeholder="Paste the code from the AquaOS appliance"><button id="connect" class="primary">Connect safely</button></div>
-        <p class="help">The code comes from the dedicated AquaOS control host, stays in this browser tab, and is not saved.</p>
+        <div id="pairing"><label for="token">Recovery pairing code</label>
+        <div class="inline"><input id="token" type="password" autocomplete="current-password" placeholder="Only needed when pairing a new browser"><button id="connect" class="primary">Pair browser</button></div>
+        <p class="help">The installation browser pairs automatically. This recovery field is only used to authorize a different browser.</p></div>
       </section>
 
       <section id="system" class="view">

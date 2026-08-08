@@ -5,6 +5,8 @@ package admin
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/subtle"
 	"crypto/tls"
 	"embed"
@@ -31,6 +33,8 @@ import (
 
 //go:embed web/*
 var assets embed.FS
+
+const adminSessionCookie = "aquaos_admin_session"
 
 // Operations is the Admin GUI-owned application-service contract.
 type Operations interface {
@@ -102,6 +106,8 @@ type Server struct {
 	mutations        *requestLimiter
 	discovery        Discovery
 	runtimeHealth    RuntimeHealth
+	sessionToken     string
+	secureCookie     bool
 }
 
 // New constructs an Admin GUI server without starting it.
@@ -119,13 +125,18 @@ func New(cfg Config, service Operations, logger *slog.Logger, options ...Option)
 	if err != nil {
 		return nil, err
 	}
-	result := &Server{cfg: cfg, operations: service, logger: logger, authentication: newRequestLimiter(cfg.AuthenticationRate, cfg.AuthenticationBurst, 1024), mutations: newRequestLimiter(cfg.MutationRate, cfg.MutationBurst, 1024)}
+	mac := hmac.New(sha256.New, []byte(cfg.Token))
+	_, _ = mac.Write([]byte("aquaos-admin-browser-session-v1"))
+	result := &Server{cfg: cfg, operations: service, logger: logger, authentication: newRequestLimiter(cfg.AuthenticationRate, cfg.AuthenticationBurst, 1024), mutations: newRequestLimiter(cfg.MutationRate, cfg.MutationBurst, 1024), sessionToken: hex.EncodeToString(mac.Sum(nil)), secureCookie: cfg.TLSCertificateFile != ""}
 	for _, option := range options {
 		option(result)
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health/live", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, map[string]string{"status": "alive"}) })
 	mux.Handle("GET /admin/", http.StripPrefix("/admin/", http.FileServer(http.FS(web))))
+	mux.HandleFunc("POST /api/session", result.createSession)
+	mux.HandleFunc("GET /api/session", result.sessionStatus)
+	mux.Handle("DELETE /api/session", result.authorize(http.HandlerFunc(result.deleteSession)))
 	mux.Handle("GET /api/status", result.authorize(http.HandlerFunc(result.status)))
 	mux.Handle("GET /api/config", result.authorize(http.HandlerFunc(result.configuration)))
 	mux.Handle("GET /api/runtime", result.authorize(http.HandlerFunc(result.runtime)))
@@ -249,8 +260,7 @@ func (s *Server) authorize(next http.Handler) http.Handler {
 			writeProblem(w, http.StatusTooManyRequests, "rate_limited", "Authentication rate limit exceeded.")
 			return
 		}
-		provided := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
-		if len(provided) != len(s.cfg.Token) || subtle.ConstantTimeCompare([]byte(provided), []byte(s.cfg.Token)) != 1 {
+		if !s.authenticated(r) {
 			writeProblem(w, 401, "authentication_required", "Valid bearer credentials are required.")
 			return
 		}
@@ -261,6 +271,44 @@ func (s *Server) authorize(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) authenticated(r *http.Request) bool {
+	provided := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+	if len(provided) == len(s.cfg.Token) && subtle.ConstantTimeCompare([]byte(provided), []byte(s.cfg.Token)) == 1 {
+		return true
+	}
+	cookie, err := r.Cookie(adminSessionCookie)
+	return err == nil && len(cookie.Value) == len(s.sessionToken) && subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(s.sessionToken)) == 1
+}
+
+func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
+	key := remoteKey(r)
+	if !s.authentication.allow(key, time.Now()) {
+		w.Header().Set("Retry-After", "1")
+		writeProblem(w, http.StatusTooManyRequests, "rate_limited", "Authentication rate limit exceeded.")
+		return
+	}
+	provided := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+	if len(provided) != len(s.cfg.Token) || subtle.ConstantTimeCompare([]byte(provided), []byte(s.cfg.Token)) != 1 {
+		writeProblem(w, http.StatusUnauthorized, "authentication_required", "Valid pairing credentials are required.")
+		return
+	}
+	http.SetCookie(w, &http.Cookie{Name: adminSessionCookie, Value: s.sessionToken, Path: "/", MaxAge: 365 * 24 * 60 * 60, HttpOnly: true, Secure: s.secureCookie, SameSite: http.SameSiteStrictMode})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) sessionStatus(w http.ResponseWriter, r *http.Request) {
+	if !s.authenticated(r) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) deleteSession(w http.ResponseWriter, _ *http.Request) {
+	http.SetCookie(w, &http.Cookie{Name: adminSessionCookie, Path: "/", MaxAge: -1, HttpOnly: true, Secure: s.secureCookie, SameSite: http.SameSiteStrictMode})
+	w.WriteHeader(http.StatusNoContent)
 }
 func (s *Server) secure(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

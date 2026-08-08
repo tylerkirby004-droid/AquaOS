@@ -115,10 +115,48 @@ func TestEmbeddedAdminUIAcceptsAndClearsFirstBootHandoff(t *testing.T) {
 		t.Fatal(err)
 	}
 	contents := string(payload)
-	for _, required := range []string{"access_token", "history.replaceState", "byId('connect').click()"} {
+	for _, required := range []string{"access_token", "history.replaceState", "resumeSession()", "fetch('/api/session'"} {
 		if !strings.Contains(contents, required) {
 			t.Fatalf("Admin UI does not contain secure first-boot handoff %q", required)
 		}
+	}
+}
+
+func TestAdminPairingCreatesPersistentProtectedSession(t *testing.T) {
+	server := newTestServer(t, &fakeOperations{})
+	pair := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/session", nil)
+	pair.Header.Set("Authorization", "Bearer "+server.cfg.Token)
+	pairResponse := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(pairResponse, pair)
+	if pairResponse.Code != http.StatusNoContent {
+		t.Fatalf("pair status = %d", pairResponse.Code)
+	}
+	cookies := pairResponse.Result().Cookies()
+	if len(cookies) != 1 || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteStrictMode || cookies[0].MaxAge <= 0 {
+		t.Fatalf("session cookie is not persistently protected: %+v", cookies)
+	}
+	if cookies[0].Value == server.cfg.Token {
+		t.Fatal("session cookie exposes the administrator token")
+	}
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/status", nil)
+	request.AddCookie(cookies[0])
+	response := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("cookie-authenticated status = %d", response.Code)
+	}
+}
+
+func TestAdminProductionPairingCookieIsSecure(t *testing.T) {
+	server := newTestServer(t, &fakeOperations{})
+	server.secureCookie = true
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/session", nil)
+	request.Header.Set("Authorization", "Bearer "+server.cfg.Token)
+	response := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(response, request)
+	cookies := response.Result().Cookies()
+	if len(cookies) != 1 || !cookies[0].Secure {
+		t.Fatalf("production session cookie is not Secure: %+v", cookies)
 	}
 }
 

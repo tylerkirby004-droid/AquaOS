@@ -6,10 +6,6 @@ const result = byId('result');
 const connection = byId('connection');
 const notice = byId('notice');
 const handoff = new URLSearchParams(window.location.hash.slice(1)).get('access_token');
-if (handoff) {
-  token.value = handoff;
-  window.history.replaceState(null, '', window.location.pathname + window.location.search);
-}
 let editable = null;
 let validatedDigest = '';
 let discovered = [];
@@ -53,7 +49,7 @@ function notify(message) {
 }
 
 async function call(path, options = {}) {
-  const headers = {Authorization: `Bearer ${token.value}`, ...(options.headers || {})};
+  const headers = {...(token.value ? {Authorization: `Bearer ${token.value}`} : {}), ...(options.headers || {})};
   if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
   const response = await fetch(path, {...options, headers});
   if (!response.ok) {
@@ -165,23 +161,46 @@ function addInventory(kind, value) {
   markChanged();
 }
 
-byId('connect').addEventListener('click', async () => {
+async function connect() {
   try {
-    if (!token.value) throw new Error('Enter the administrator access code.');
-    const [statusResponse, configResponse] = await Promise.all([call('/api/status'), call('/api/config')]);
+    if (token.value) {
+      const paired = await fetch('/api/session', {method: 'POST', headers: {Authorization: `Bearer ${token.value}`}});
+      if (!paired.ok) throw new Error('This browser could not be paired.');
+      token.value = '';
+    }
+	const [statusResponse, configResponse] = await Promise.all([call('/api/status'), call('/api/config')]);
     result.textContent = JSON.stringify(await statusResponse.json(), null, 2);
     editable = await configResponse.json();
     try { renderRuntime(await (await call('/api/runtime')).json()); } catch (error) { byId('runtimeStatus').innerHTML = `<div class="check fail"><strong>Core status unavailable</strong><div>${escapeHTML(error.message)}</div></div>`; }
     fillForm();
     connection.textContent = 'Securely connected';
     connection.className = 'status connected';
-    token.setAttribute('readonly', 'readonly');
+    byId('pairing').hidden = true;
+    byId('signout').hidden = false;
     notify('Connected. Your current settings were loaded.');
     showView('system');
   } catch (error) { connection.textContent = error.message; }
+}
+
+byId('connect').addEventListener('click', connect);
+byId('signout').addEventListener('click', async () => {
+  await fetch('/api/session', {method: 'DELETE'});
+  window.location.reload();
 });
 
-if (handoff) byId('connect').click();
+async function resumeSession() {
+  if (handoff) {
+    token.value = handoff;
+    const paired = await fetch('/api/session', {method: 'POST', headers: {Authorization: `Bearer ${handoff}`}});
+    if (!paired.ok) { connection.textContent = 'Automatic browser pairing failed.'; return; }
+    token.value = '';
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+  const session = await fetch('/api/session');
+  if (session.ok) await connect();
+}
+
+resumeSession();
 
 byId('verify').addEventListener('click', async () => {
   try {
