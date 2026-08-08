@@ -13,7 +13,7 @@ func TestDashboardUsesStableDiscoveryEntities(t *testing.T) {
 	cfg.MQTT.SiteID = "display-reef"
 	cfg.Inventory.Sensors = []config.Sensor{{EntityID: "tank-temperature"}}
 	cfg.Inventory.Equipment = []config.Equipment{{EntityID: "return-pump"}}
-	payload, err := Dashboard(cfg, "http://appliance.local:3000")
+	payload, err := Dashboard(cfg, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,8 +47,12 @@ func TestEmptyDashboardIsValidYAML(t *testing.T) {
 	}
 }
 
-func TestDashboardRejectsNonHTTPGrafanaURL(t *testing.T) {
-	if _, err := Dashboard(config.Defaults(), "file:///etc/passwd"); err == nil {
-		t.Fatal("unsafe Grafana URL accepted")
+func TestDashboardIgnoresLegacyGrafanaURL(t *testing.T) {
+	payload, err := Dashboard(config.Defaults(), "file:///etc/passwd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(payload), "iframe") || strings.Contains(string(payload), "grafana") {
+		t.Fatalf("dashboard still renders Grafana content:\n%s", payload)
 	}
 }

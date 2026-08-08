@@ -10,18 +10,11 @@ import (
 
 func TestHomeAssistantAddonImagesAreDistinct(t *testing.T) {
 	core := readAddonManifest(t, "../../aquaos/config.yaml")
-	history := readAddonManifest(t, "../../aquaos-history/config.yaml")
 	if core.Image != "ghcr.io/tylerkirby004-droid/aquaos-addon" {
 		t.Fatalf("core add-on image = %q", core.Image)
 	}
-	if history.Image != "ghcr.io/tylerkirby004-droid/aquaos-history-addon" {
-		t.Fatalf("history add-on image = %q", history.Image)
-	}
-	if core.Image == history.Image {
-		t.Fatal("advanced trends must not run the core add-on image")
-	}
-	if history.IngressPort != 1337 {
-		t.Fatalf("history add-on ingress port = %d", history.IngressPort)
+	if _, err := os.Stat("../../aquaos-history/config.yaml"); !os.IsNotExist(err) {
+		t.Fatal("Grafana Advanced Trends add-on manifest must not be installable")
 	}
 }
 
@@ -38,7 +31,6 @@ func TestCoreAddonVersionMatchesRuntimeVersion(t *testing.T) {
 
 func TestHomeAssistantWorkflowPublishesManifestImages(t *testing.T) {
 	core := readAddonManifest(t, "../../aquaos/config.yaml")
-	history := readAddonManifest(t, "../../aquaos-history/config.yaml")
 	workflow, err := os.ReadFile("../../.github/workflows/home-assistant-app.yml")
 	if err != nil {
 		t.Fatal(err)
@@ -47,12 +39,13 @@ func TestHomeAssistantWorkflowPublishesManifestImages(t *testing.T) {
 	for _, required := range []string{
 		"BUILD_VERSION=" + core.Version,
 		core.Image + ":" + core.Version,
-		"BUILD_VERSION=" + history.Version,
-		history.Image + ":" + history.Version,
 	} {
 		if !strings.Contains(contents, required) {
 			t.Fatalf("Home Assistant workflow does not publish %q", required)
 		}
+	}
+	if strings.Contains(contents, "aquaos-history-addon") || strings.Contains(contents, "aquaos-history/Dockerfile") {
+		t.Fatal("Home Assistant workflow must not publish the removed Grafana add-on")
 	}
 }
 

@@ -1,5 +1,5 @@
 name: AquaOS
-version: "0.2.5"
+version: "0.2.6"
 slug: aquaos
 description: Safety policy, aquarium setup, diagnostics, and control in one Home Assistant panel
 url: https://github.com/tylerkirby004-droid/AquaOS

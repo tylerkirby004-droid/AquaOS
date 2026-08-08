@@ -16,6 +16,9 @@ let homeAssistantDevices = [];
 let editingEquipmentID = '';
 let editingAlarmID = '';
 let homeAssistantSession = false;
+let runtimeTimer = 0;
+let latestRuntime = null;
+let activeAlarms = [];
 
 const savedTheme = window.localStorage.getItem('aquaos-theme') || 'auto';
 function applyTheme(theme) {
@@ -98,6 +101,21 @@ function showView(id) {
 }
 document.querySelectorAll('.nav-item').forEach(item => item.addEventListener('click', () => showView(item.dataset.view)));
 
+function updateStepProgress() {
+  const config = editable?.configuration;
+  if (!config) return;
+  const complete = {
+    welcome: true,
+    system: Boolean(latestRuntime && latestRuntime.available !== false),
+    integrations: true,
+    discovery: config.inventory.devices.length > 0,
+    inventory: config.inventory.sensors.length > 0 || config.inventory.equipment.length > 0,
+    alarms: activeAlarms.length === 0 && config.alarms.rules.length > 0,
+    backups: true
+  };
+  document.querySelectorAll('.nav-item').forEach(item => item.classList.toggle('complete', Boolean(complete[item.dataset.view])));
+}
+
 function markChanged() {
   validatedDigest = '';
   byId('apply').disabled = true;
@@ -126,6 +144,7 @@ function fillForm() {
   renderInventory();
   renderAlarms();
   renderServiceLinks();
+  updateStepProgress();
   updatePreview();
 }
 
@@ -136,65 +155,14 @@ function renderServiceLinks() {
   byId('serviceLinks').innerHTML = `<strong>Your AquaOS panel</strong><div class="row-actions">${links.map(link => `<a href="${escapeHTML(link.url)}">${escapeHTML(link.name)}</a>`).join('')}</div>`;
 }
 
-function renderHistoryStatus(status) {
-  const target = byId('advancedHistoryStatus');
-  const button = byId('setupHistory');
-  if (status.running) {
-    target.innerHTML = `<strong>Advanced trends:</strong> InfluxDB and Grafana are running${status.version ? ` — version ${escapeHTML(status.version)}` : ''}.`;
-    button.textContent = 'Open Grafana trends';
-    button.dataset.panelPath = status.panelPath || '';
-    button.dataset.mode = 'open';
-  } else if (status.installed) {
-    target.innerHTML = '<strong>Advanced trends:</strong> installed but not running. Choose repair setup.';
-    button.textContent = 'Repair advanced trends automatically';
-    button.dataset.mode = 'setup';
-  } else {
-    target.innerHTML = '<strong>Advanced trends:</strong> not installed.';
-    button.textContent = 'Set up advanced trends automatically';
-    button.dataset.mode = 'setup';
-  }
-}
-
-async function loadHistoryStatus() {
-  try {
-    const status = await (await call('/api/history')).json();
-    renderHistoryStatus(status);
-  } catch (error) {
-    byId('advancedHistoryStatus').innerHTML = `<strong>Advanced trends unavailable:</strong> ${escapeHTML(error.message)}`;
-  }
-}
-
-byId('setupHistory').addEventListener('click', async () => {
-  const button = byId('setupHistory');
-  if (button.dataset.mode === 'open' && button.dataset.panelPath) {
-    window.top.location.href = button.dataset.panelPath;
-    return;
-  }
-  if (!window.confirm('Install and configure the optional InfluxDB and Grafana history service? AquaOS Core continues safely if this service stops.')) return;
-  button.disabled = true;
-  try {
-    byId('advancedHistoryStatus').textContent = 'Installing InfluxDB and Grafana. This can take several minutes…';
-    const status = await (await call('/api/history/setup', {method: 'POST', body: '{}'})).json();
-    editable.configuration.storage.influxdb.enabled = true;
-    editable.configuration.storage.influxdb.url = status.influxUrl;
-    editable.configuration.storage.influxdb.organization = status.organization;
-    editable.configuration.storage.influxdb.bucket = status.bucket;
-    editable.influxdbTokenFile = status.tokenFile;
-    fillForm();
-    markChanged();
-    await saveConfiguration();
-    renderHistoryStatus(status);
-    notify('InfluxDB and Grafana are installed, connected, and ready.');
-  } catch (error) {
-    byId('advancedHistoryStatus').innerHTML = `<strong>Setup failed:</strong> ${escapeHTML(error.message)}`;
-  } finally {
-    button.disabled = false;
-  }
-});
-
 function renderRuntime(report) {
+  latestRuntime = report;
 	if (report.available === false) {
 		byId('runtimeStatus').innerHTML = `<div class="check fail"><strong>Core status unavailable</strong><div>${escapeHTML(report.message)}</div></div>`;
+    activeAlarms = [];
+    renderOverview(report);
+    renderActiveAlarms();
+    updateStepProgress();
 		return;
 	}
   const health = report.health || report;
@@ -203,6 +171,95 @@ function renderRuntime(report) {
   const stateRows = values.filter(value => value.key?.entityKind === 'sensor' || value.key?.entityKind === 'equipment').map(value => ({name: `${value.key.entityKind}: ${value.key.entityId}`, state: value.quality || 'unknown', message: value.key.attribute || ''}));
   const rows = [...components, ...stateRows];
   byId('runtimeStatus').innerHTML = rows.length ? rows.map(component => `<div class="check ${component.state === 'healthy' || component.state === 'good' ? 'pass' : 'fail'}"><strong>${escapeHTML(component.name)}</strong><div>${escapeHTML(component.state || 'unknown')}${component.message ? ` — ${escapeHTML(component.message)}` : ''}</div></div>`).join('') : '<p class="empty">Core returned no component or canonical-state status.</p>';
+  activeAlarms = Array.isArray(report.activeAlarms?.items) ? report.activeAlarms.items : [];
+  renderOverview(report);
+  renderActiveAlarms();
+  updateStepProgress();
+}
+
+function sensorDefinitionByEntity() {
+  const sensors = editable?.configuration?.inventory?.sensors || [];
+  return new Map(sensors.map(sensor => [sensor.entityId || sensor.id, sensor]));
+}
+
+function equipmentDefinitionByEntity() {
+  const equipment = editable?.configuration?.inventory?.equipment || [];
+  return new Map(equipment.map(item => [item.entityId || item.id, item]));
+}
+
+function iconForKind(kind) {
+  return {heater: 'H', 'return-pump': 'P', 'circulation-pump': 'P', light: 'L', ato: 'A', 'dosing-pump': 'D', outlet: 'O'}[kind] || 'E';
+}
+
+function unitLabel(unit) {
+  return {celsius: '°C', fahrenheit: '°F', pH: 'pH', ppt: 'ppt', liters_per_hour: 'L/h', boolean: ''}[unit] || unit || '';
+}
+
+function readingLabel(kind) {
+  return {temperature: 'Temperature', ph: 'pH', salinity: 'Salinity'}[kind] || kind;
+}
+
+function numericText(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '--';
+  if (Math.abs(number) >= 100) return number.toFixed(0);
+  if (Math.abs(number) >= 10) return number.toFixed(1);
+  return number.toFixed(2).replace(/0$/, '');
+}
+
+function stateClass(quality, on) {
+  if (['invalid', 'unavailable', 'stale'].includes(String(quality || '').toLowerCase())) return 'fault';
+  return on ? 'on' : 'off';
+}
+
+function renderOverview(report) {
+  const values = Array.isArray(report?.canonicalState?.values) ? report.canonicalState.values : [];
+  const sensorsByEntity = sensorDefinitionByEntity();
+  const wanted = new Set(['temperature', 'ph', 'salinity']);
+  const readings = values.filter(item => item.key?.entityKind === 'sensor' && item.value?.quantity && wanted.has(String(item.value.quantity.kind || sensorsByEntity.get(item.key.entityId)?.quantity || '').toLowerCase()));
+  byId('readingGrid').innerHTML = readings.length ? readings.slice(0, 6).map(item => {
+    const sensor = sensorsByEntity.get(item.key.entityId) || {};
+    const quantity = item.value.quantity;
+    const kind = String(quantity.kind || sensor.quantity || '').toLowerCase();
+    return `<div class="reading-card ${stateClass(item.quality, true)}"><span>${escapeHTML(readingLabel(kind))}</span><strong>${escapeHTML(numericText(quantity.value))}</strong><em>${escapeHTML(unitLabel(quantity.unit || sensor.unit))}</em><small>${escapeHTML(sensor.name || item.key.entityId)} · ${escapeHTML(item.quality || 'unknown')}</small></div>`;
+  }).join('') : '<p class="empty">No temperature, pH, or salinity readings are live yet.</p>';
+
+  const equipmentByEntity = equipmentDefinitionByEntity();
+  const equipmentByID = new Map();
+  values.filter(item => item.key?.entityKind === 'equipment').forEach(item => {
+    const previous = equipmentByID.get(item.key.entityId);
+    if (!previous || item.key.plane === 'reported' || previous.key?.plane !== 'reported') equipmentByID.set(item.key.entityId, item);
+  });
+  const equipmentValues = Array.from(equipmentByID.values());
+  byId('equipmentChips').innerHTML = equipmentValues.length ? equipmentValues.map(item => {
+    const equipment = equipmentByEntity.get(item.key.entityId) || {};
+    const on = item.value?.boolean === true || String(item.value?.text || '').toLowerCase() === 'on';
+    const css = stateClass(item.quality, on);
+    const label = css === 'fault' ? 'fault' : on ? 'on' : 'off';
+    return `<div class="equipment-chip ${css}"><span class="kind-icon">${escapeHTML(iconForKind(equipment.kind))}</span><div><strong>${escapeHTML(equipment.name || item.key.entityId)}</strong><small>${escapeHTML(equipment.kind || 'equipment')} · ${escapeHTML(item.key.attribute || 'state')}</small></div><span class="state-chip ${css}">${escapeHTML(label)}</span></div>`;
+  }).join('') : '<p class="empty">No equipment state has been reported yet.</p>';
+  byId('lastUpdated').textContent = report?.available === false ? 'Core unavailable' : `Updated ${new Date().toLocaleTimeString([], {hour: 'numeric', minute: '2-digit', second: '2-digit'})}`;
+}
+
+function renderActiveAlarms() {
+  const banner = byId('alarmBanner');
+  if (!activeAlarms.length) {
+    banner.className = 'alarm-banner clear';
+    banner.textContent = 'No active alarms';
+    byId('activeAlarmList').innerHTML = '<p class="empty">No active alarms.</p>';
+    return;
+  }
+  banner.className = 'alarm-banner active';
+  banner.textContent = `${activeAlarms.length} active alarm${activeAlarms.length === 1 ? '' : 's'}: ${activeAlarms.map(alarm => alarm.code || alarm.ruleId || alarm.id).join(', ')}`;
+  byId('activeAlarmList').innerHTML = activeAlarms.map(alarm => `<div class="alarm-row ${escapeHTML(alarm.severity || 'warning')}"><strong>${escapeHTML(alarm.code || alarm.ruleId || alarm.id)}</strong><span>${escapeHTML(alarm.subject?.kind || 'subject')} ${escapeHTML(alarm.subject?.id || '')}</span><span class="state-chip fault">${escapeHTML(alarm.severity || 'active')}</span></div>`).join('');
+}
+
+async function refreshRuntime() {
+  try {
+    renderRuntime(await (await call('/api/runtime')).json());
+  } catch (error) {
+    renderRuntime({available: false, message: error.message});
+  }
 }
 
 function collectServices() {
@@ -212,11 +269,11 @@ function collectServices() {
   config.mqtt.siteId = byId('siteId').value.trim();
   config.mqtt.broker = byId('broker').value.trim();
   config.mqtt.clientId = byId('clientId').value.trim();
-  config.storage.influxdb.enabled = byId('influxEnabled').checked;
-  config.storage.influxdb.url = byId('influxUrl').value.trim();
-  config.storage.influxdb.organization = byId('influxOrg').value.trim();
-  config.storage.influxdb.bucket = byId('influxBucket').value.trim();
-  editable.influxdbTokenFile = byId('influxToken').value.trim();
+  config.storage.influxdb.enabled = false;
+  config.storage.influxdb.url = '';
+  config.storage.influxdb.organization = '';
+  config.storage.influxdb.bucket = '';
+  editable.influxdbTokenFile = '';
   markChanged();
 }
 
@@ -271,15 +328,16 @@ async function connect() {
 	const [statusResponse, configResponse] = await Promise.all([call('/api/status'), call('/api/config')]);
     result.textContent = JSON.stringify(await statusResponse.json(), null, 2);
     editable = await configResponse.json();
-    try { renderRuntime(await (await call('/api/runtime')).json()); } catch (error) { byId('runtimeStatus').innerHTML = `<div class="check fail"><strong>Core status unavailable</strong><div>${escapeHTML(error.message)}</div></div>`; }
     fillForm();
-    await loadHistoryStatus();
+    await refreshRuntime();
+    if (runtimeTimer) window.clearInterval(runtimeTimer);
+    runtimeTimer = window.setInterval(refreshRuntime, 5000);
     connection.textContent = 'Securely connected';
     connection.className = 'status connected';
     byId('pairing').hidden = true;
     byId('signout').hidden = homeAssistantSession;
     notify('Connected. Your current settings were loaded.');
-    showView('system');
+    showView('welcome');
   } catch (error) { connection.textContent = error.message; }
 }
 

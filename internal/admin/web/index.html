@@ -14,7 +14,7 @@
   </header>
   <div class="shell">
     <nav aria-label="Administration sections">
-      <button class="nav-item active" data-view="welcome">1. Welcome</button>
+      <button class="nav-item active" data-view="welcome">1. Overview</button>
       <button class="nav-item" data-view="system">2. System check</button>
       <button class="nav-item" data-view="integrations">3. Services</button>
       <button class="nav-item" data-view="discovery">4. Find devices</button>
@@ -23,10 +23,14 @@
       <button class="nav-item" data-view="backups">7. Backups</button>
     </nav>
     <main>
+      <div id="alarmBanner" class="alarm-banner clear">No active alarms</div>
       <section id="welcome" class="view active">
-        <p class="eyebrow">Guided setup</p>
-        <h1>Let’s set up your aquarium</h1>
-        <p class="lede">This assistant uses plain-language choices and checks every change before AquaOS accepts it. Nothing on this page directly switches physical equipment.</p>
+        <p class="eyebrow">Live overview</p>
+        <h1>AquaOS</h1>
+        <div class="overview-head"><p class="lede">Current tank conditions, equipment state, and active alarms refresh automatically.</p><span id="lastUpdated" class="status-pill neutral">Waiting for Core</span></div>
+        <div id="readingGrid" class="reading-grid"><p class="empty">Connect to load live temperature, pH, and salinity.</p></div>
+        <h2>Equipment</h2>
+        <div id="equipmentChips" class="equipment-grid"><p class="empty">No live equipment state yet.</p></div>
         <div id="serviceLinks" class="card"><strong>Detected AquaOS pages</strong><p class="empty">Pages appear automatically after AquaOS connects.</p></div>
         <div class="card warning"><strong>Before continuing</strong><p>Add only aquarium equipment you intend AquaOS to manage. Core still enforces fail-safe states, run limits, sensor interlocks, and independent safeguards.</p></div>
         <div id="pairing"><label for="token">Recovery pairing code</label>
@@ -44,9 +48,9 @@
 
       <section id="integrations" class="view">
         <p class="eyebrow">Step 3</p><h1>History and integrations</h1>
-        <p>Home Assistant connection and normal history are automatic. AquaOS never asks you for broker addresses, database URLs, or token files.</p>
+        <p>Home Assistant connection and normal history are automatic. AquaOS uses Home Assistant recorder graphs and does not install Grafana.</p>
         <p class="service-state good">Home Assistant is connected automatically.</p><input id="mqttEnabled" type="checkbox" hidden><input id="siteId" type="hidden"><input id="broker" type="hidden"><input id="clientId" type="hidden">
-        <div class="card"><h2>History</h2><p><strong>Everyday graphs:</strong> Home Assistant History is available automatically.</p><p id="advancedHistoryStatus"><strong>Advanced trends:</strong> checking InfluxDB and Grafana…</p><input id="influxEnabled" type="checkbox" hidden><input id="influxUrl" type="hidden"><input id="influxOrg" type="hidden"><input id="influxBucket" type="hidden"><input id="influxToken" type="hidden"><button id="setupHistory" class="primary">Set up advanced trends automatically</button></div>
+        <div class="card"><h2>History</h2><p><strong>Everyday graphs:</strong> Home Assistant History is the supported trend view.</p><input id="influxEnabled" type="checkbox" hidden><input id="influxUrl" type="hidden"><input id="influxOrg" type="hidden"><input id="influxBucket" type="hidden"><input id="influxToken" type="hidden"></div>
         <button id="saveServices" class="primary">Continue</button>
       </section>
 
@@ -71,7 +75,9 @@
       </section>
 
       <section id="alarms" class="view">
-        <p class="eyebrow">Step 6</p><h1>Alarm rules</h1><p>Choose what is unsafe, how long it must persist, and where AquaOS should publish the notification. Critical control never depends on notification delivery.</p>
+        <p class="eyebrow">Step 6</p><h1>Alarms</h1><p>Active alarms stay visible across the app. Rules define what AquaOS should watch next.</p>
+        <div id="activeAlarmList" class="card alarm-list"><p class="empty">No active alarms.</p></div>
+        <h2>Alarm rules</h2>
         <form id="alarmForm" class="card fields"><input id="alarmId" type="hidden"><label>What should this alarm say?<input id="alarmName" required placeholder="Tank temperature too high"></label><label>Watch this sensor<select id="alarmSensor"></select></label><label>Alert me when it is<select id="alarmCondition"><option value="above">Above a value</option><option value="below">Below a value</option><option value="outside">Outside a safe range</option><option value="true">Active, wet, or faulted</option><option value="false">Inactive or dry</option></select></label><label>Alarm value<input id="alarmThreshold" type="number" step="any" value="0"></label><label>Top of safe range<input id="alarmThresholdHigh" type="number" step="any"></label><label>Importance<select id="alarmSeverity"><option value="warning">Warning</option><option value="critical">Critical</option><option value="info">Information</option></select></label><details><summary>Timing and notifications</summary><label>Wait before alarming<input id="alarmDelay" placeholder="30s" value="30s"></label><label>Healthy time before clearing<input id="alarmClearDelay" placeholder="2m" value="2m"></label><label class="switch"><input id="alarmLatching" type="checkbox"><span>Keep active until acknowledged</span></label><label class="switch"><input id="notifyHA" type="checkbox" checked><span>Notify through Home Assistant</span></label><label class="switch"><input id="notifyLog" type="checkbox" checked><span>Record in AquaOS</span></label></details><button>Add alarm</button></form>
         <div id="alarmList" class="card"><p class="empty">No alarm rules configured.</p></div>
         <button id="saveSetup" class="primary">Save AquaOS setup</button>

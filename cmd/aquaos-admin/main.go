@@ -35,8 +35,8 @@ func run() int {
 	coreTokenFile := flag.String("core-token-file", "", "AquaOS Core API token file")
 	homeAssistantWebSocket := flag.String("home-assistant-websocket", "", "Home Assistant WebSocket proxy URL")
 	supervisorURL := flag.String("supervisor-url", "", "Home Assistant Supervisor API base URL")
-	historyTokenFile := flag.String("history-token-file", "", "writable generated InfluxDB token file")
-	historyCoreTokenFile := flag.String("history-core-token-file", "", "InfluxDB token path visible to AquaOS Core")
+	historyTokenFile := flag.String("history-token-file", "", "legacy generated InfluxDB token file")
+	historyCoreTokenFile := flag.String("history-core-token-file", "", "legacy InfluxDB token path visible to AquaOS Core")
 	root := flag.String("root", "/", "managed dedicated-appliance root")
 	authenticationRate := flag.Int("authentication-rate", 5, "authentication attempts per second per client")
 	authenticationBurst := flag.Int("authentication-burst", 10, "authentication attempt burst per client")
@@ -88,13 +88,8 @@ func run() int {
 		}
 		options = append(options, admin.WithHomeAssistantRegistry(homeAssistantClient))
 	}
-	if *supervisorURL != "" {
-		supervisorClient, clientErr := homeassistant.NewSupervisorClient(*supervisorURL, os.Getenv("SUPERVISOR_TOKEN"), *historyTokenFile, *historyCoreTokenFile, 2*time.Minute)
-		if clientErr != nil {
-			_, _ = fmt.Fprintln(os.Stderr, clientErr)
-			return 1
-		}
-		options = append(options, admin.WithAdvancedHistory(supervisorClient))
+	if *supervisorURL != "" || *historyTokenFile != "" || *historyCoreTokenFile != "" {
+		logger.Info("legacy history setup flags ignored; Home Assistant recorder is the supported history surface")
 	}
 	if *coreTokenFile != "" {
 		coreToken, tokenErr := readToken(*coreTokenFile)
@@ -141,7 +136,11 @@ func (c *coreHealthClient) Report(ctx context.Context) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"health": healthReport, "canonicalState": stateReport}, nil
+	activeAlarms, err := c.get(ctx, "/api/v1/alarms?status=active")
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"health": healthReport, "canonicalState": stateReport, "activeAlarms": activeAlarms}, nil
 }
 
 func (c *coreHealthClient) get(ctx context.Context, path string) (any, error) {

@@ -129,7 +129,7 @@ func TestEmbeddedAdminUIIsAvailableWithoutNodeBuild(t *testing.T) {
 	server := newTestServer(t, &fakeOperations{})
 	response := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/", nil))
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "Let’s set up your aquarium") {
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "Live overview") {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 }
@@ -138,7 +138,7 @@ func TestAdminRootServesIngressUI(t *testing.T) {
 	server := newTestServer(t, &fakeOperations{})
 	response := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "Let’s set up your aquarium") {
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "Live overview") {
 		t.Fatalf("status=%d body=%q", response.Code, response.Body.String())
 	}
 }

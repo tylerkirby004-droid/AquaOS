@@ -69,13 +69,6 @@ type HomeAssistantRegistry interface {
 	Devices(context.Context) ([]homeassistant.RegistryDevice, error)
 }
 
-// AdvancedHistory manages the optional InfluxDB and Grafana companion without
-// exposing generated credentials to the browser.
-type AdvancedHistory interface {
-	History(context.Context) (homeassistant.HistoryStatus, error)
-	SetupHistory(context.Context) (homeassistant.HistoryStatus, error)
-}
-
 // Option configures optional Admin capabilities.
 type Option func(*Server)
 
@@ -92,11 +85,6 @@ func WithRuntimeHealth(service RuntimeHealth) Option {
 // WithHomeAssistantRegistry enables read-only Home Assistant inventory import.
 func WithHomeAssistantRegistry(service HomeAssistantRegistry) Option {
 	return func(server *Server) { server.homeAssistant = service }
-}
-
-// WithAdvancedHistory enables guided companion-service setup.
-func WithAdvancedHistory(service AdvancedHistory) Option {
-	return func(server *Server) { server.advancedHistory = service }
 }
 
 // Config contains externally supplied listener and request bounds.
@@ -137,7 +125,6 @@ type Server struct {
 	discovery        Discovery
 	runtimeHealth    RuntimeHealth
 	homeAssistant    HomeAssistantRegistry
-	advancedHistory  AdvancedHistory
 	sessionToken     string
 	secureCookie     bool
 	trustedIngress   *net.IPNet
@@ -189,8 +176,6 @@ func New(cfg Config, service Operations, logger *slog.Logger, options ...Option)
 	mux.Handle("POST /api/config/editable/apply", result.authorize(http.HandlerFunc(result.applyEditableConfiguration)))
 	mux.Handle("POST /api/discovery/probe", result.authorize(http.HandlerFunc(result.probe)))
 	mux.Handle("GET /api/home-assistant/devices", result.authorize(http.HandlerFunc(result.homeAssistantDevices)))
-	mux.Handle("GET /api/history", result.authorize(http.HandlerFunc(result.historyStatus)))
-	mux.Handle("POST /api/history/setup", result.authorize(http.HandlerFunc(result.setupHistory)))
 	mux.Handle("POST /api/verify", result.authorize(http.HandlerFunc(result.verify)))
 	mux.Handle("POST /api/repair", result.authorize(http.HandlerFunc(result.repair)))
 	mux.Handle("POST /api/install", result.authorize(http.HandlerFunc(result.install)))
@@ -449,29 +434,6 @@ func (s *Server) homeAssistantDevices(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.logger.Warn("Home Assistant inventory request failed", "error", err)
 		writeProblem(w, http.StatusBadRequest, "home_assistant_inventory_failed", err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, value)
-}
-
-func (s *Server) historyStatus(w http.ResponseWriter, r *http.Request) {
-	if s.advancedHistory == nil {
-		writeProblem(w, http.StatusServiceUnavailable, "history_unavailable", "Automatic advanced history is not available in this deployment.")
-		return
-	}
-	value, err := s.advancedHistory.History(r.Context())
-	s.respond(w, value, err)
-}
-
-func (s *Server) setupHistory(w http.ResponseWriter, r *http.Request) {
-	if s.advancedHistory == nil {
-		writeProblem(w, http.StatusServiceUnavailable, "history_unavailable", "Automatic advanced history is not available in this deployment.")
-		return
-	}
-	value, err := s.advancedHistory.SetupHistory(r.Context())
-	if err != nil {
-		s.logger.Warn("Advanced history setup failed", "error", err)
-		writeProblem(w, http.StatusBadRequest, "history_setup_failed", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, value)
