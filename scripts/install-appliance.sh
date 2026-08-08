@@ -80,8 +80,36 @@ if [ "$ack_appliance" != true ] || [ "$ack_safeguards" != true ]; then
 fi
 
 export DEBIAN_FRONTEND=noninteractive
+# Debian Installer media can leave an active cdrom source behind. First boot
+# must not depend on the ISO remaining attached, so disable optical-media
+# entries and add official Debian network sources only when none exists.
+if [ -f /etc/apt/sources.list ]; then
+  sed -i 's/^[[:space:]]*deb[[:space:]]\+cdrom:/# Disabled by AquaOS: deb cdrom:/' /etc/apt/sources.list
+fi
+for source_list in /etc/apt/sources.list.d/*.list; do
+  if [ -f "$source_list" ]; then
+    sed -i 's/^[[:space:]]*deb[[:space:]]\+cdrom:/# Disabled by AquaOS: deb cdrom:/' "$source_list"
+  fi
+done
+codename=${VERSION_CODENAME:-}
+case "$codename" in *[!a-z0-9-]*|'') echo "Debian release codename is unavailable or invalid" >&2; exit 1;; esac
+if ! grep -RqsE '^[[:space:]]*(deb[[:space:]]+(\[[^]]+\][[:space:]]+)?https?://|URIs:[[:space:]]+https?://)' /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null; then
+  cat > /etc/apt/sources.list.d/aquaos-debian.sources <<EOF
+Types: deb
+URIs: https://deb.debian.org/debian
+Suites: $codename $codename-updates
+Components: main non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
+Types: deb
+URIs: https://security.debian.org/debian-security
+Suites: $codename-security
+Components: main non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+EOF
+fi
 apt-get update
-apt-get install -y --no-install-recommends docker.io docker-compose openssl ca-certificates
+apt-get install -y --no-install-recommends docker.io docker-compose openssl ca-certificates sudo
 systemctl enable --now docker
 profile=standard
 if [ "$advanced_history" = true ]; then profile=advanced-history; fi

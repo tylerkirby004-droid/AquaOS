@@ -32,6 +32,8 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o "$work/config/includ
 sed -e "s/@VERSION@/$AQUAOS_VERSION/g" -e "s/@SHA256@/$checksum/g" \
   packaging/appliance-image/aquaos-firstboot.service > "$work/config/includes.chroot/etc/systemd/system/aquaos-firstboot.service"
 ln -s ../aquaos-firstboot.service "$work/config/includes.chroot/etc/systemd/system/multi-user.target.wants/aquaos-firstboot.service"
+cp packaging/appliance-image/aquaos-live-help.service "$work/config/includes.chroot/etc/systemd/system/aquaos-live-help.service"
+ln -s ../aquaos-live-help.service "$work/config/includes.chroot/etc/systemd/system/multi-user.target.wants/aquaos-live-help.service"
 
 cd "$work"
 lb config --mode debian --distribution trixie --architectures amd64 \

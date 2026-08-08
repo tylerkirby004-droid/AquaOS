@@ -1,0 +1,17 @@
+[Unit]
+Description=AquaOS installation-mode guidance
+ConditionPathExists=/run/live/medium
+Conflicts=getty@tty1.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'printf "\n\nAquaOS has been started in Live mode.\n\nRestart this computer and choose Graphical Install to install AquaOS.\nDo not log in or enter terminal commands.\n\n" > /dev/tty1'
+StandardInput=tty-force
+StandardOutput=journal+console
+StandardError=journal+console
+TTYPath=/dev/tty1
+TTYReset=yes
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

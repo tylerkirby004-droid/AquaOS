@@ -61,21 +61,27 @@ func main() {
 		slog.Error("valid embedded version and checksum are required")
 		os.Exit(2)
 	}
-	tokenBytes := make([]byte, 20)
+	tokenBytes := make([]byte, 8)
 	if _, err := rand.Read(tokenBytes); err != nil {
 		slog.Error("generate setup code", "error", err)
 		os.Exit(1)
 	}
 	token := hex.EncodeToString(tokenBytes)
-	if err := os.WriteFile("/run/aquaos-setup-code", []byte(token+"\n"), 0o600); err != nil {
+	displayToken := strings.Join([]string{token[0:4], token[4:8], token[8:12], token[12:16]}, "-")
+	if err := os.WriteFile("/run/aquaos-setup-code", []byte(displayToken+"\n"), 0o600); err != nil {
 		slog.Error("write setup code", "error", err)
 		os.Exit(1)
 	}
-	message := "AquaOS setup: open https://aquaos.local:8443 and enter code " + token + "\n"
+	lanAddress := privateIPv4()
+	url := "https://aquaos.local:8443"
+	if lanAddress != "" {
+		url = "https://" + lanAddress + ":8443"
+	}
+	message := "\n\nAquaOS browser setup is ready.\n\nOpen: " + url + "\nSetup code: " + displayToken + "\n\nNo Linux login or terminal commands are required.\n"
 	_ = os.WriteFile("/dev/tty1", []byte(message), 0o600)
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
-	srv, err := firstboot.NewServer(ctx, token, privateIPv4(), installer{script: filepath.Join(*payload, "scripts/install-appliance.sh"), payload: *payload, version: *version, checksum: *checksum, complete: *complete})
+	srv, err := firstboot.NewServer(ctx, token, lanAddress, installer{script: filepath.Join(*payload, "scripts/install-appliance.sh"), payload: *payload, version: *version, checksum: *checksum, complete: *complete})
 	if err != nil {
 		slog.Error("create onboarding server", "error", err)
 		os.Exit(1)
@@ -87,7 +93,7 @@ func main() {
 		defer stop()
 		_ = httpServer.Shutdown(shutdownCtx)
 	}()
-	slog.Info("first-boot onboarding ready", "url", "https://aquaos.local:8443")
+	slog.Info("first-boot onboarding ready", "url", url)
 	if err := httpServer.ListenAndServeTLS(*tlsCert, *tlsKey); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("serve onboarding", "error", err)
 		os.Exit(1)

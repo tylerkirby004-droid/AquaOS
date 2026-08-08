@@ -33,7 +33,9 @@ mismatch.
 2. Connect the dedicated computer to wired Ethernet, a monitor, and keyboard.
 3. Insert the USB drive and boot from it. The boot-menu key is commonly F12,
    F11, Esc, or Del.
-4. Choose **Install AquaOS**.
+4. Choose **Graphical Install**. Do not choose **Live system**. If Live mode is
+   selected accidentally, the screen tells you to restart and choose Graphical
+   Install; no login or terminal commands are needed.
 5. Choose language and keyboard and create the requested local recovery account.
 6. Select the dedicated computer's internal disk. Read the erase confirmation
    carefully. Do not select a disk containing anything you need.
@@ -44,15 +46,18 @@ disk selection and the destructive confirmation visible.
 
 ## Finish in a browser
 
-After the new computer starts, its screen shows a one-time setup code. On
-another device connected to the same trusted LAN, open:
+After the new computer starts, leave its monitor on the AquaOS setup screen. It
+shows the exact browser address and a short one-time code in groups of four.
+Do not log in. On another device connected to the same trusted LAN, open the
+address shown on that screen, normally:
 
 ```text
 https://aquaos.local:8443
 ```
 
 The temporary certificate is generated on that computer, so the browser may
-ask you to approve a local certificate warning. Enter the displayed setup code,
+ask you to approve a local certificate warning. Enter the displayed setup code
+(hyphens are optional),
 enter the private address currently assigned and reserved in your router,
 choose the timezone, and accept
 the two safety statements.

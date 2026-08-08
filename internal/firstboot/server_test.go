@@ -14,7 +14,7 @@ func (f *fakeRunner) Install(context.Context, InstallRequest) error { f.called =
 
 func TestInstallRequiresAuthenticationAndAcknowledgements(t *testing.T) {
 	runner := &fakeRunner{}
-	server, err := NewServer(context.Background(), "0123456789abcdef0123456789abcdef", "192.168.1.50", runner)
+	server, err := NewServer(context.Background(), "0123456789abcdef", "192.168.1.50", runner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,11 +26,26 @@ func TestInstallRequiresAuthenticationAndAcknowledgements(t *testing.T) {
 		t.Fatalf("status = %d", response.Code)
 	}
 	request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/install", bytes.NewReader(body))
-	request.Header.Set("Authorization", "Bearer 0123456789abcdef0123456789abcdef")
+	request.Header.Set("Authorization", "Bearer 0123456789abcdef")
 	response = httptest.NewRecorder()
 	server.Handler().ServeHTTP(response, request)
 	if response.Code != http.StatusOK || !runner.called {
 		t.Fatalf("status = %d, called = %v", response.Code, runner.called)
+	}
+}
+
+func TestSetupPageNormalizesDisplayedCode(t *testing.T) {
+	server, err := NewServer(context.Background(), "0123456789abcdef", "192.168.1.50", &fakeRunner{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	response := httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, request)
+	for _, required := range []string{"xxxx-xxxx-xxxx-xxxx", "replace(/[^0-9a-f]/g,'')"} {
+		if !bytes.Contains(response.Body.Bytes(), []byte(required)) {
+			t.Fatalf("setup page does not contain %q", required)
+		}
 	}
 }
 

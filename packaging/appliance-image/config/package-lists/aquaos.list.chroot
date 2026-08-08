@@ -4,5 +4,7 @@ curl
 debian-installer-launcher
 docker-compose
 docker.io
+debian-archive-keyring
 openssl
 openssh-server
+sudo
