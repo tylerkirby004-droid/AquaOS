@@ -1,0 +1,48 @@
+name: Publish test ISO prerelease
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful Build appliance ISO workflow run ID
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Download successful ISO artifact
+        uses: actions/download-artifact@v7
+        with:
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pattern: aquaos-test-iso-*
+          path: image
+          merge-multiple: true
+      - name: Validate publication payload
+        run: |
+          image=$(find image -maxdepth 1 -type f -name '*.iso' -print -quit)
+          test -n "$image"
+          checksum="$image.sha256"
+          test -f "$checksum"
+          digest=$(awk 'NR == 1 {print $1}' "$checksum")
+          printf '%s  %s\n' "$digest" "$(basename "$image")" > "$checksum"
+          (cd image && sha256sum --check "$(basename "$checksum")")
+          test -f image/READ-BEFORE-USING.txt
+      - name: Create persistent test prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="test-iso-${{ inputs.run_id }}"
+          gh release create "$tag" image/* \
+            --target "${{ github.sha }}" \
+            --prerelease \
+            --title "AquaOS unvalidated test ISO (${{ inputs.run_id }})" \
+            --notes-file image/READ-BEFORE-USING.txt
