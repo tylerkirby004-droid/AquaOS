@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -12,7 +13,7 @@ type fakeRunner struct{ called bool }
 
 func (f *fakeRunner) Install(context.Context, InstallRequest) (InstallResult, error) {
 	f.called = true
-	return InstallResult{AdminAccessToken: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}, nil
+	return InstallResult{AdminAccessToken: strings.Repeat("a", 64)}, nil
 }
 
 func TestInstallRequiresAuthenticationAndAcknowledgements(t *testing.T) {
