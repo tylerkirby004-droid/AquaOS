@@ -93,7 +93,18 @@ function fillForm() {
   byId('backupRetention').value = config.backups.retentionDays || 30;
   renderInventory();
   renderAlarms();
+  renderServiceLinks();
   updatePreview();
+}
+
+function renderServiceLinks() {
+  const host = window.location.hostname;
+  const links = [
+    {name: 'AquaOS Admin', url: `${window.location.protocol}//${window.location.host}/admin/`},
+    {name: 'Home Assistant', url: `http://${host}:8123`}
+  ];
+  if (editable.configuration.storage.influxdb.enabled) links.push({name: 'Advanced trends', url: `http://${host}:3000`});
+  byId('serviceLinks').innerHTML = `<strong>Detected AquaOS pages</strong><div class="row-actions">${links.map(link => `<a href="${escapeHTML(link.url)}" target="_blank" rel="noreferrer">${escapeHTML(link.name)}</a>`).join('')}</div>`;
 }
 
 function renderRuntime(report) {

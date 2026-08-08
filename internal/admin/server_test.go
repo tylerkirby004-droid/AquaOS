@@ -115,7 +115,7 @@ func TestEmbeddedAdminUIAcceptsAndClearsFirstBootHandoff(t *testing.T) {
 		t.Fatal(err)
 	}
 	contents := string(payload)
-	for _, required := range []string{"access_token", "history.replaceState", "resumeSession()", "fetch('/api/session'"} {
+	for _, required := range []string{"access_token", "history.replaceState", "resumeSession()", "fetch('/api/session'", "renderServiceLinks()", "Home Assistant", "Advanced trends"} {
 		if !strings.Contains(contents, required) {
 			t.Fatalf("Admin UI does not contain secure first-boot handoff %q", required)
 		}
