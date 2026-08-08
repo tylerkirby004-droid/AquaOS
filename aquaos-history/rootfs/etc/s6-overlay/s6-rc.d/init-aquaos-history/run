@@ -1,0 +1,35 @@
+#!/command/with-contenv bashio
+set -euo pipefail
+attempt=0
+until [[ -f /run/aquaos-influx-ready ]]; do
+  attempt=$((attempt + 1))
+  if [[ "${attempt}" -ge 30 ]]; then bashio::exit.nok 'InfluxDB setup did not complete'; fi
+  sleep 1
+done
+token=$(bashio::config 'influx_token')
+mkdir -p /etc/grafana/provisioning/datasources /etc/grafana/provisioning/dashboards
+cat > /etc/grafana/provisioning/datasources/aquaos.yaml <<EOF
+apiVersion: 1
+datasources:
+  - name: AquaOS InfluxDB
+    uid: aquaos-influxdb
+    type: influxdb
+    access: proxy
+    url: http://127.0.0.1:8086
+    jsonData:
+      version: Flux
+      organization: aquaos
+      defaultBucket: aquaos
+    secureJsonData:
+      token: ${token}
+    isDefault: true
+EOF
+cat > /etc/grafana/provisioning/dashboards/aquaos.yaml <<EOF
+apiVersion: 1
+providers:
+  - name: AquaOS
+    folder: AquaOS
+    type: file
+    options:
+      path: /opt/aquaos/dashboards
+EOF

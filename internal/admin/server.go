@@ -27,6 +27,7 @@ import (
 	"github.com/tylerkirby004-droid/aquaos/internal/config"
 	"github.com/tylerkirby004-droid/aquaos/internal/discovery"
 	"github.com/tylerkirby004-droid/aquaos/internal/health"
+	"github.com/tylerkirby004-droid/aquaos/internal/integrations/homeassistant"
 	"github.com/tylerkirby004-droid/aquaos/internal/operations"
 	"gopkg.in/yaml.v3"
 )
@@ -63,6 +64,18 @@ type RuntimeHealth interface {
 	Report(context.Context) (any, error)
 }
 
+// HomeAssistantRegistry supplies devices already discovered by Home Assistant.
+type HomeAssistantRegistry interface {
+	Devices(context.Context) ([]homeassistant.RegistryDevice, error)
+}
+
+// AdvancedHistory manages the optional InfluxDB and Grafana companion without
+// exposing generated credentials to the browser.
+type AdvancedHistory interface {
+	History(context.Context) (homeassistant.HistoryStatus, error)
+	SetupHistory(context.Context) (homeassistant.HistoryStatus, error)
+}
+
 // Option configures optional Admin capabilities.
 type Option func(*Server)
 
@@ -74,6 +87,16 @@ func WithDiscovery(service Discovery) Option {
 // WithRuntimeHealth enables the read-only operational status panel.
 func WithRuntimeHealth(service RuntimeHealth) Option {
 	return func(server *Server) { server.runtimeHealth = service }
+}
+
+// WithHomeAssistantRegistry enables read-only Home Assistant inventory import.
+func WithHomeAssistantRegistry(service HomeAssistantRegistry) Option {
+	return func(server *Server) { server.homeAssistant = service }
+}
+
+// WithAdvancedHistory enables guided companion-service setup.
+func WithAdvancedHistory(service AdvancedHistory) Option {
+	return func(server *Server) { server.advancedHistory = service }
 }
 
 // Config contains externally supplied listener and request bounds.
@@ -113,6 +136,8 @@ type Server struct {
 	mutations        *requestLimiter
 	discovery        Discovery
 	runtimeHealth    RuntimeHealth
+	homeAssistant    HomeAssistantRegistry
+	advancedHistory  AdvancedHistory
 	sessionToken     string
 	secureCookie     bool
 	trustedIngress   *net.IPNet
@@ -163,6 +188,9 @@ func New(cfg Config, service Operations, logger *slog.Logger, options ...Option)
 	mux.Handle("POST /api/config/editable/validate", result.authorize(http.HandlerFunc(result.validateEditableConfiguration)))
 	mux.Handle("POST /api/config/editable/apply", result.authorize(http.HandlerFunc(result.applyEditableConfiguration)))
 	mux.Handle("POST /api/discovery/probe", result.authorize(http.HandlerFunc(result.probe)))
+	mux.Handle("GET /api/home-assistant/devices", result.authorize(http.HandlerFunc(result.homeAssistantDevices)))
+	mux.Handle("GET /api/history", result.authorize(http.HandlerFunc(result.historyStatus)))
+	mux.Handle("POST /api/history/setup", result.authorize(http.HandlerFunc(result.setupHistory)))
 	mux.Handle("POST /api/verify", result.authorize(http.HandlerFunc(result.verify)))
 	mux.Handle("POST /api/repair", result.authorize(http.HandlerFunc(result.repair)))
 	mux.Handle("POST /api/install", result.authorize(http.HandlerFunc(result.install)))
@@ -409,6 +437,33 @@ func (s *Server) probe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := s.discovery.Probe(r.Context(), request.Candidates)
+	s.respond(w, value, err)
+}
+
+func (s *Server) homeAssistantDevices(w http.ResponseWriter, r *http.Request) {
+	if s.homeAssistant == nil {
+		writeProblem(w, http.StatusServiceUnavailable, "home_assistant_unavailable", "Home Assistant inventory is not available in this deployment.")
+		return
+	}
+	value, err := s.homeAssistant.Devices(r.Context())
+	s.respond(w, value, err)
+}
+
+func (s *Server) historyStatus(w http.ResponseWriter, r *http.Request) {
+	if s.advancedHistory == nil {
+		writeProblem(w, http.StatusServiceUnavailable, "history_unavailable", "Automatic advanced history is not available in this deployment.")
+		return
+	}
+	value, err := s.advancedHistory.History(r.Context())
+	s.respond(w, value, err)
+}
+
+func (s *Server) setupHistory(w http.ResponseWriter, r *http.Request) {
+	if s.advancedHistory == nil {
+		writeProblem(w, http.StatusServiceUnavailable, "history_unavailable", "Automatic advanced history is not available in this deployment.")
+		return
+	}
+	value, err := s.advancedHistory.SetupHistory(r.Context())
 	s.respond(w, value, err)
 }
 

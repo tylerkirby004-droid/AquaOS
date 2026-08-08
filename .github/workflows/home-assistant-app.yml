@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - aquaos/**
+      - aquaos-history/**
       - cmd/**
       - internal/**
       - pkg/**
@@ -35,8 +36,18 @@ jobs:
           platforms: linux/amd64
           push: true
           build-args: |
-            BUILD_VERSION=0.1.2
+            BUILD_VERSION=0.2.0
             BUILD_ARCH=amd64
           tags: |
-            ghcr.io/tylerkirby004-droid/aquaos-addon:0.1.2
+            ghcr.io/tylerkirby004-droid/aquaos-addon:0.2.0
             ghcr.io/tylerkirby004-droid/aquaos-addon:edge
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: aquaos-history/Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            BUILD_VERSION=0.1.0-history
+            BUILD_ARCH=amd64
+          tags: ghcr.io/tylerkirby004-droid/aquaos-addon:0.1.0-history

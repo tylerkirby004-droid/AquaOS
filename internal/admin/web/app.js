@@ -12,9 +12,23 @@ const applicationBase = window.location.pathname.includes('/admin/')
 let editable = null;
 let validatedDigest = '';
 let discovered = [];
+let homeAssistantDevices = [];
 let editingEquipmentID = '';
 let editingAlarmID = '';
 let homeAssistantSession = false;
+
+const savedTheme = window.localStorage.getItem('aquaos-theme') || 'auto';
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  byId('themeToggle').textContent = `Theme: ${theme[0].toUpperCase()}${theme.slice(1)}`;
+}
+applyTheme(savedTheme);
+byId('themeToggle').addEventListener('click', () => {
+  const current = document.documentElement.dataset.theme || 'auto';
+  const next = current === 'auto' ? 'dark' : current === 'dark' ? 'light' : 'auto';
+  window.localStorage.setItem('aquaos-theme', next);
+  applyTheme(next);
+});
 
 function normalizeConfiguration() {
   const config = editable.configuration;
@@ -108,6 +122,61 @@ function renderServiceLinks() {
   byId('serviceLinks').innerHTML = `<strong>Your AquaOS panel</strong><div class="row-actions">${links.map(link => `<a href="${escapeHTML(link.url)}">${escapeHTML(link.name)}</a>`).join('')}</div>`;
 }
 
+function renderHistoryStatus(status) {
+  const target = byId('advancedHistoryStatus');
+  const button = byId('setupHistory');
+  if (status.running) {
+    target.innerHTML = `<strong>Advanced trends:</strong> InfluxDB and Grafana are running${status.version ? ` — version ${escapeHTML(status.version)}` : ''}.`;
+    button.textContent = 'Open Grafana trends';
+    button.dataset.panelPath = status.panelPath || '';
+    button.dataset.mode = 'open';
+  } else if (status.installed) {
+    target.innerHTML = '<strong>Advanced trends:</strong> installed but not running. Choose repair setup.';
+    button.textContent = 'Repair advanced trends automatically';
+    button.dataset.mode = 'setup';
+  } else {
+    target.innerHTML = '<strong>Advanced trends:</strong> not installed.';
+    button.textContent = 'Set up advanced trends automatically';
+    button.dataset.mode = 'setup';
+  }
+}
+
+async function loadHistoryStatus() {
+  try {
+    const status = await (await call('/api/history')).json();
+    renderHistoryStatus(status);
+  } catch (error) {
+    byId('advancedHistoryStatus').innerHTML = `<strong>Advanced trends unavailable:</strong> ${escapeHTML(error.message)}`;
+  }
+}
+
+byId('setupHistory').addEventListener('click', async () => {
+  const button = byId('setupHistory');
+  if (button.dataset.mode === 'open' && button.dataset.panelPath) {
+    window.top.location.href = button.dataset.panelPath;
+    return;
+  }
+  if (!window.confirm('Install and configure the optional InfluxDB and Grafana history service? AquaOS Core continues safely if this service stops.')) return;
+  button.disabled = true;
+  try {
+    byId('advancedHistoryStatus').textContent = 'Installing InfluxDB and Grafana. This can take several minutes…';
+    const status = await (await call('/api/history/setup', {method: 'POST', body: '{}'})).json();
+    editable.configuration.storage.influxdb.enabled = true;
+    editable.configuration.storage.influxdb.url = status.influxUrl;
+    editable.configuration.storage.influxdb.organization = status.organization;
+    editable.configuration.storage.influxdb.bucket = status.bucket;
+    editable.influxdbTokenFile = status.tokenFile;
+    fillForm();
+    markChanged();
+    renderHistoryStatus(status);
+    notify('Advanced trends are running. Continue through Safety review to apply the generated connection to AquaOS.');
+  } catch (error) {
+    byId('advancedHistoryStatus').innerHTML = `<strong>Setup failed:</strong> ${escapeHTML(error.message)}`;
+  } finally {
+    button.disabled = false;
+  }
+});
+
 function renderRuntime(report) {
 	if (report.available === false) {
 		byId('runtimeStatus').innerHTML = `<div class="check fail"><strong>Core status unavailable</strong><div>${escapeHTML(report.message)}</div></div>`;
@@ -189,6 +258,7 @@ async function connect() {
     editable = await configResponse.json();
     try { renderRuntime(await (await call('/api/runtime')).json()); } catch (error) { byId('runtimeStatus').innerHTML = `<div class="check fail"><strong>Core status unavailable</strong><div>${escapeHTML(error.message)}</div></div>`; }
     fillForm();
+    await loadHistoryStatus();
     connection.textContent = 'Securely connected';
     connection.className = 'status connected';
     byId('pairing').hidden = true;
@@ -282,6 +352,60 @@ function mapDiscovery(item) {
   showView('inventory');
 }
 
+function supportedSensor(entity) {
+  const unit = String(entity.unit || '').toLowerCase();
+  const deviceClass = String(entity.deviceClass || '').toLowerCase();
+  if (unit === '°c' || unit === 'c' || unit === 'celsius') return {unit: 'celsius', quantity: 'temperature'};
+  if (unit === '°f' || unit === 'f' || unit === 'fahrenheit') return {unit: 'fahrenheit', quantity: 'temperature'};
+  if (unit === 'ph') return {unit: 'pH', quantity: 'ph'};
+  if (unit === 'ppt') return {unit: 'ppt', quantity: 'salinity'};
+  if (unit === 'l/h' || unit === 'lph') return {unit: 'liters_per_hour', quantity: 'flow'};
+  if (entity.entityId.startsWith('binary_sensor.') || ['moisture', 'opening', 'problem'].includes(deviceClass)) return {unit: 'boolean', quantity: 'boolean'};
+  return null;
+}
+
+function importHomeAssistantDevice(device) {
+  const inventory = editable.configuration.inventory;
+  if (inventory.devices.some(item => item.metadata?.homeAssistantDeviceId === device.id)) throw new Error('This Home Assistant device is already imported.');
+  const key = shortID(device.name, 'home-assistant-device');
+  const deviceID = inventory.devices.some(item => item.id === key) ? `${key}-${Date.now()}` : key;
+  inventory.devices.push({id: deviceID, entityId: crypto.randomUUID(), name: device.name || deviceID, manufacturer: device.manufacturer || '', model: device.model || '', firmware: device.firmware || '', metadata: {source: 'home-assistant', homeAssistantDeviceId: device.id, areaId: device.areaId || '', configurationUrl: device.configurationUrl || ''}});
+  device.entities.filter(entity => !entity.disabled).forEach(entity => {
+    const sensor = supportedSensor(entity);
+    const entityKey = shortID(entity.name || entity.entityId, 'entity');
+    if (sensor && !inventory.sensors.some(item => item.id === entityKey)) {
+      inventory.sensors.push({id: entityKey, entityId: crypto.randomUUID(), deviceId: deviceID, name: entity.name || entity.entityId, quantity: sensor.quantity, unit: sensor.unit, calibration: {enabled: false, scale: 1, offset: 0}});
+      return;
+    }
+    if (entity.entityId.startsWith('switch.') && !inventory.equipment.some(item => item.id === entityKey)) {
+      inventory.equipment.push({id: entityKey, entityId: crypto.randomUUID(), deviceId: deviceID, name: entity.name || entity.entityId, kind: 'outlet', capabilities: ['switch', 'reported-state'], hazardous: false, failSafeOn: false, maximumOn: 0, maximumDailyOn: 0, minimumOff: 0, commissioning: {stage: 'discovered'}});
+    }
+  });
+  renderInventory();
+  renderAlarms();
+  markChanged();
+  notify('Imported from Home Assistant. Outputs remain uncommissioned and cannot activate yet.');
+}
+
+function renderHomeAssistantDevices() {
+  const target = byId('haDeviceResults');
+  if (!homeAssistantDevices.length) {
+    target.innerHTML = '<p class="empty">Home Assistant returned no registered devices.</p>';
+    return;
+  }
+  target.innerHTML = homeAssistantDevices.map((device, index) => `<div class="ha-device"><div><strong>${escapeHTML(device.name || 'Unnamed device')}</strong><div class="help">${escapeHTML([device.manufacturer, device.model, device.areaId].filter(Boolean).join(' · ') || 'No manufacturer or area information')}</div><div>${device.entities.length} ${device.entities.length === 1 ? 'entity' : 'entities'}</div></div><button data-import-ha-device="${index}">Add to AquaOS</button></div>`).join('');
+}
+
+byId('loadHADevices').addEventListener('click', async () => {
+  try {
+    byId('haDeviceResults').innerHTML = '<p>Loading devices from Home Assistant…</p>';
+    homeAssistantDevices = await (await call('/api/home-assistant/devices')).json();
+    renderHomeAssistantDevices();
+  } catch (error) {
+    byId('haDeviceResults').innerHTML = `<div class="check fail"><strong>Could not load Home Assistant devices</strong><div>${escapeHTML(error.message)}</div></div>`;
+  }
+});
+
 byId('deviceForm').addEventListener('submit', event => { event.preventDefault(); try { addInventory('devices', {id: byId('deviceId').value}); event.target.reset(); } catch (error) { notify(error.message); } });
 byId('sensorForm').addEventListener('submit', event => { event.preventDefault(); try { const calibrated = byId('calibrationEnabled').checked; addInventory('sensors', {id: byId('sensorId').value, entityId: crypto.randomUUID(), name: byId('sensorName').value.trim(), deviceId: byId('sensorDevice').value, quantity: byId('sensorUnit').value === 'boolean' ? 'boolean' : 'measurement', unit: byId('sensorUnit').value, calibration: {enabled: calibrated, scale: Number(byId('calibrationScale').value), offset: Number(byId('calibrationOffset').value), reference: calibrated ? byId('calibrationReference').value.trim() : '', calibratedBy: calibrated ? 'admin-gui-operator' : '', calibratedAt: calibrated ? new Date().toISOString() : '0001-01-01T00:00:00Z'}}); event.target.reset(); renderAlarms(); } catch (error) { notify(error.message); } });
 byId('equipmentForm').addEventListener('submit', event => { event.preventDefault(); try { const kind = byId('equipmentKind').value; const hazardous = ['heater', 'ato', 'dosing-pump'].includes(kind); const requiredSensorIds = byId('requiredSensors').value.split(',').map(value => value.trim()).filter(Boolean); const existing = editingEquipmentID ? editable.configuration.inventory.equipment.find(value => value.id === editingEquipmentID) : null; const value = {id: byId('equipmentId').value.trim(), entityId: existing?.entityId || crypto.randomUUID(), name: byId('equipmentName').value.trim(), deviceId: byId('equipmentDevice').value, kind, capabilities: ['switch', 'command-acknowledgement', 'reported-state'], hazardous, failSafeOn: false, maximumOn: duration(byId('maximumOn').value, !hazardous), maximumDailyOn: duration(byId('maximumDaily').value, kind !== 'dosing-pump'), minimumOff: duration(byId('minimumOff').value), requiredSensorIds, commissioning: existing?.commissioning || {stage: 'uncommissioned'}}; if (existing) { const index = editable.configuration.inventory.equipment.indexOf(existing); editable.configuration.inventory.equipment[index] = value; const endpoint = editable.configuration.adapters.shelly.endpoints.find(item => item.equipmentId === value.entityId); if (endpoint) { endpoint.equipmentKind = kind === 'heater' ? 'heater' : 'outlet'; endpoint.maximumOn = value.maximumOn; endpoint.requiredProbeIds = requiredSensorIds.map(sensorID => editable.configuration.inventory.sensors.find(sensor => sensor.id === sensorID)?.entityId).filter(Boolean); } editingEquipmentID = ''; event.submitter.textContent = 'Add equipment'; renderInventory(); markChanged(); } else { addInventory('equipment', value); } event.target.reset(); } catch (error) { notify(error.message); } });
@@ -306,6 +430,11 @@ byId('alarmForm').addEventListener('submit', event => {
 });
 
 document.addEventListener('click', event => {
+  const homeAssistantIndex = event.target.dataset.importHaDevice;
+  if (homeAssistantIndex !== undefined) {
+    try { importHomeAssistantDevice(homeAssistantDevices[Number(homeAssistantIndex)]); } catch (error) { notify(error.message); }
+    return;
+  }
   const mapIndex = event.target.dataset.mapDiscovery;
   if (mapIndex !== undefined) {
     try { mapDiscovery(discovered[Number(mapIndex)]); } catch (error) { notify(error.message); }

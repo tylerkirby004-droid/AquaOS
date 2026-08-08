@@ -1,0 +1,43 @@
+name: AquaOS Advanced Trends
+version: "0.1.0-history"
+slug: aquaos_history
+description: Automatically managed InfluxDB and Grafana for AquaOS long-term trends
+url: https://github.com/tylerkirby004-droid/AquaOS
+arch:
+  - amd64
+image: ghcr.io/tylerkirby004-droid/aquaos-addon
+startup: services
+boot: auto
+init: false
+ingress: true
+ingress_port: 1337
+panel_icon: mdi:chart-timeline-variant
+panel_title: AquaOS Trends
+panel_admin: false
+backup: cold
+stage: experimental
+options:
+  plugins: []
+  custom_plugins: []
+  env_vars: []
+  ssl: false
+  certfile: fullchain.pem
+  keyfile: privkey.pem
+  influx_token: ""
+  influx_admin_password: ""
+schema:
+  plugins:
+    - str
+  custom_plugins:
+    - name: str
+      url: str
+      unsigned: bool?
+  env_vars:
+    - name: match(^GF_([A-Z0-9_])+$)
+      value: str
+  ssl: bool
+  certfile: str
+  keyfile: str
+  grafana_ingress_user: str?
+  influx_token: password?
+  influx_admin_password: password?

@@ -9,7 +9,7 @@
 <body>
   <header class="topbar">
     <div><span class="brand-mark">A</span><strong>AquaOS</strong><span class="subtle">Administration</span></div>
-    <div><span id="connection" class="status disconnected">Not connected</span> <button id="signout" hidden>Unpair browser</button></div>
+    <div><button id="themeToggle" aria-label="Change color theme">Theme: Auto</button> <span id="connection" class="status disconnected">Not connected</span> <button id="signout" hidden>Unpair browser</button></div>
   </header>
   <div class="shell">
     <nav aria-label="Administration sections">
@@ -43,18 +43,19 @@
       </section>
 
       <section id="integrations" class="view">
-        <p class="eyebrow">Step 3</p><h1>Optional services</h1>
-        <p>AquaOS keeps controlling locally if these services stop.</p>
-        <div class="card"><label class="switch"><input id="mqttEnabled" type="checkbox"><span>Connect Home Assistant and MQTT</span></label><div class="fields"><label>Site name<input id="siteId" placeholder="home-reef"></label><label>MQTT address<input id="broker" placeholder="ssl://aquaos-services:8883"></label><label>Client name<input id="clientId" placeholder="aquaos"></label></div></div>
-        <div class="card"><label class="switch"><input id="influxEnabled" type="checkbox"><span>Store history in InfluxDB</span></label><div class="fields"><label>InfluxDB address<input id="influxUrl" placeholder="http://aquaos-services:8086"></label><label>Organization<input id="influxOrg"></label><label>Bucket<input id="influxBucket" placeholder="aquaos"></label><label>Token file on appliance<input id="influxToken" placeholder="/etc/aquaos/secrets/influxdb.token"></label></div></div>
-        <button id="saveServices" class="primary">Check these settings</button>
+        <p class="eyebrow">Step 3</p><h1>History and integrations</h1>
+        <p>Home Assistant connection and normal history are automatic. AquaOS never asks you for broker addresses, database URLs, or token files.</p>
+        <div class="card"><h2>Home Assistant</h2><p class="service-state good">Connected through the protected Home Assistant app network</p><input id="mqttEnabled" type="checkbox" hidden><input id="siteId" type="hidden"><input id="broker" type="hidden"><input id="clientId" type="hidden"></div>
+        <div class="card"><h2>History</h2><p><strong>Everyday graphs:</strong> Home Assistant History is available automatically.</p><p id="advancedHistoryStatus"><strong>Advanced trends:</strong> checking InfluxDB and Grafana…</p><input id="influxEnabled" type="checkbox" hidden><input id="influxUrl" type="hidden"><input id="influxOrg" type="hidden"><input id="influxBucket" type="hidden"><input id="influxToken" type="hidden"><button id="setupHistory" class="primary">Set up advanced trends automatically</button></div>
+        <button id="saveServices" class="primary">Continue</button>
       </section>
 
       <section id="discovery" class="view">
-        <p class="eyebrow">Step 4</p><h1>Find a device</h1>
-        <p>Enter the local address printed on the device or shown by your router. AquaOS sends read-only requests only to this address; it does not scan the Internet or your whole network.</p>
-        <form id="discoveryForm" class="card fields"><label>Device type<select id="discoveryKind"><option value="shelly">Shelly Plug</option><option value="esp32">AquaOS ESP32 sensor node</option></select></label><label>Local address<input id="discoveryUrl" required placeholder="http://shellyplug.local"></label><label>Shelly outlet number<input id="discoveryChannel" type="number" min="0" max="31" value="0"></label><label>ESP32 access-code file (if protected)<input id="discoveryTokenFile" placeholder="/etc/aquaos/secrets/esp32-node.token"></label><button class="primary">Check this address</button></form>
-        <div id="discoveryResults" class="card"><p class="empty">No device checked yet.</p></div>
+        <p class="eyebrow">Step 4</p><h1>Choose devices from Home Assistant</h1>
+        <p>Home Assistant already discovers your Shelly, ESPHome, and other supported devices. AquaOS reads that inventory and lets you choose which devices belong to the aquarium. Importing a device never turns it on.</p>
+        <button id="loadHADevices" class="primary">Load Home Assistant devices</button>
+        <div id="haDeviceResults" class="card"><p class="empty">Choose “Load Home Assistant devices.”</p></div>
+        <details><summary>Advanced troubleshooting: check a device directly</summary><p>Use this only when a device is not available in Home Assistant.</p><form id="discoveryForm" class="card fields"><label>Device type<select id="discoveryKind"><option value="shelly">Shelly Plug</option><option value="esp32">AquaOS ESP32 sensor node</option></select></label><label>Local address<input id="discoveryUrl" required placeholder="http://shellyplug.local"></label><label>Shelly outlet number<input id="discoveryChannel" type="number" min="0" max="31" value="0"></label><label>ESP32 access-code file (if protected)<input id="discoveryTokenFile"></label><button>Check this address</button></form><div id="discoveryResults" class="card"><p class="empty">No direct check performed.</p></div></details>
       </section>
 
       <section id="inventory" class="view">

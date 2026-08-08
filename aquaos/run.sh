@@ -13,7 +13,8 @@ if [[ ! -f /config/aquaos.yaml ]]; then
 fi
 ln -sf /config/aquaos.yaml /etc/aquaos/aquaos.yaml
 ln -sf /config/api.token /etc/aquaos/secrets/api.token
-printf '%s\n' '0.1.2' > /var/lib/aquaos/current-version
+if [[ -f /config/influxdb.token ]]; then ln -sf /config/influxdb.token /etc/aquaos/secrets/influxdb.token; fi
+printf '%s\n' '0.2.0' > /var/lib/aquaos/current-version
 printf '%s\n' '[Unit]' 'Description=AquaOS Core (managed by Home Assistant Supervisor)' > /etc/systemd/system/aquaos.service
 
 core_loop() {
@@ -54,6 +55,10 @@ fi
   -address 0.0.0.0:8099 \
   -trusted-ingress \
   -trusted-ingress-cidr 172.30.32.2/32 \
+  -home-assistant-websocket ws://supervisor/core/websocket \
+  -supervisor-url http://supervisor \
+  -history-token-file /config/influxdb.token \
+  -history-core-token-file /config/influxdb.token \
   -core-url http://127.0.0.1:8080 \
   -core-token-file /config/api.token &
 admin_pid=$!

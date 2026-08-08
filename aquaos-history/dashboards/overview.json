@@ -1,0 +1,13 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "panels": [
+    {"type": "timeseries", "title": "Sensor history", "datasource": {"type": "influxdb", "uid": "aquaos-influxdb"}, "targets": [{"refId": "A", "query": "from(bucket: \"aquaos\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"aquaos_state\")"}], "gridPos": {"h": 12, "w": 24, "x": 0, "y": 0}}
+  ],
+  "schemaVersion": 41,
+  "tags": ["aquaos"],
+  "time": {"from": "now-24h", "to": "now"},
+  "title": "AquaOS Overview",
+  "uid": "aquaos-overview",
+  "version": 1
+}

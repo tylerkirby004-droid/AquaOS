@@ -1,0 +1,19 @@
+#!/command/with-contenv bashio
+set -euo pipefail
+token=$(bashio::config 'influx_token')
+password=$(bashio::config 'influx_admin_password')
+if [[ -z "${token}" || -z "${password}" ]]; then
+  bashio::exit.nok 'AquaOS must configure Advanced Trends before it can start.'
+fi
+mkdir -p /data/influxdb/engine
+rm -f /run/aquaos-influx-ready
+influxd --bolt-path /data/influxdb/influxd.bolt --engine-path /data/influxdb/engine --http-bind-address :8086 &
+pid=$!
+trap 'kill ${pid} 2>/dev/null || true; wait ${pid} 2>/dev/null || true' EXIT TERM INT
+bashio::net.wait_for 8086 127.0.0.1 30
+if [[ ! -f /data/influxdb/.configured ]]; then
+  influx setup --host http://127.0.0.1:8086 --username aquaos --password "${password}" --org aquaos --bucket aquaos --token "${token}" --force
+  touch /data/influxdb/.configured
+fi
+touch /run/aquaos-influx-ready
+wait "${pid}"
