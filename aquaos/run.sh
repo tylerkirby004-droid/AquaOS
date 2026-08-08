@@ -13,7 +13,7 @@ if [[ ! -f /config/aquaos.yaml ]]; then
 fi
 ln -sf /config/aquaos.yaml /etc/aquaos/aquaos.yaml
 ln -sf /config/api.token /etc/aquaos/secrets/api.token
-printf '%s\n' '0.1.1-dev' > /var/lib/aquaos/current-version
+printf '%s\n' '0.1.2' > /var/lib/aquaos/current-version
 printf '%s\n' '[Unit]' 'Description=AquaOS Core (managed by Home Assistant Supervisor)' > /etc/systemd/system/aquaos.service
 
 core_loop() {
