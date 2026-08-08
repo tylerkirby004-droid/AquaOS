@@ -261,7 +261,7 @@ func TestRealAdaptersRequireExplicitBenchActivationAndTypedBounds(t *testing.T) 
 	}
 }
 
-func TestOperatorConfigurationValidatesAlarmCalibrationCommissioningAndBackup(t *testing.T) {
+func TestOperatorConfigurationValidatesAlarmCalibrationLegacyCommissioningAndBackup(t *testing.T) {
 	cfg := Defaults()
 	calibratedAt := time.Now().UTC()
 	cfg.Inventory.Devices = []Device{{ID: "sensor-node", Name: "Fish room sensor node"}}
@@ -274,8 +274,8 @@ func TestOperatorConfigurationValidatesAlarmCalibrationCommissioningAndBackup(t 
 		t.Fatal(err)
 	}
 	cfg.Inventory.Equipment[0] = Equipment{ID: "heater", DeviceID: "sensor-node", Kind: "heater", Capabilities: []domain.Capability{domain.CapabilitySwitch}, Hazardous: true, MaximumOn: time.Hour, RequiredSensorIDs: []string{"tank-temperature"}, Commissioning: Commissioning{Stage: "commissioned"}}
-	if err := cfg.Validate(); validationCode(err) != "evidence_required" {
-		t.Fatalf("unsafe commissioning error = %v", err)
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("legacy commissioning evidence blocked safety-policy configuration: %v", err)
 	}
 }
 

@@ -240,7 +240,7 @@ function renderInventory() {
   const rows = [
     ...inventory.devices.map(value => ({kind: 'Device', id: value.id, detail: value.name || 'Physical or network device'})),
     ...inventory.sensors.map(value => ({kind: 'Sensor', id: value.id, detail: `${value.name || value.id} — ${value.unit} on ${value.deviceId}`, extra: `<button data-calibrate="${escapeHTML(value.id)}">Calibrate</button>`})),
-    ...inventory.equipment.map(value => ({kind: 'Equipment', id: value.id, detail: `${value.name || value.id} — ${value.kind || 'unassigned'} — ${(value.commissioning && value.commissioning.stage) || 'uncommissioned'}`, extra: `<button data-commission="${escapeHTML(value.id)}">Commission</button>`}))
+    ...inventory.equipment.map(value => ({kind: 'Equipment', id: value.id, detail: `${value.name || value.id} — ${value.kind || 'unassigned'}`}))
   ];
   byId('inventoryList').innerHTML = rows.length ? rows.map(row => `<div class="inventory-row"><div><span class="tag">${row.kind}</span></div><strong>${escapeHTML(row.id)}</strong><span>${escapeHTML(row.detail)}</span><div class="row-actions"><button data-edit-kind="${row.kind.toLowerCase()}" data-edit-id="${escapeHTML(row.id)}">Rename</button>${row.extra || ''}<button data-remove-kind="${row.kind.toLowerCase()}" data-remove-id="${escapeHTML(row.id)}">Remove</button></div></div>`).join('') : '<p class="empty">No equipment or sensors have been added.</p>';
 }
@@ -349,7 +349,7 @@ function mapDiscovery(item) {
     const key = shortID(item.identity, 'shelly-outlet');
     if (config.inventory.devices.some(device => device.id === key)) throw new Error('This Shelly appears to be mapped already.');
     config.inventory.devices.push({id: key, entityId: endpointID, name: `Shelly ${item.identity}`, manufacturer: 'Shelly', metadata: {adapter: 'shelly'}});
-    config.inventory.equipment.push({id: `${key}-equipment`, entityId: equipmentID, deviceId: key, name: 'Unassigned outlet', kind: 'outlet', capabilities: ['switch', 'command-acknowledgement', 'reported-state', 'power-telemetry'], hazardous: false, failSafeOn: false, maximumOn: 0, maximumDailyOn: 0, minimumOff: 0, commissioning: {stage: 'discovered'}});
+    config.inventory.equipment.push({id: `${key}-equipment`, entityId: equipmentID, deviceId: key, name: 'Unassigned outlet', kind: 'outlet', capabilities: ['switch', 'command-acknowledgement', 'reported-state', 'power-telemetry'], hazardous: false, failSafeOn: false, maximumOn: 0, maximumDailyOn: 0, minimumOff: 0});
     config.adapters.shelly.endpoints.push({id: endpointID, equipmentId: equipmentID, alarmRuleId: uuid(), baseUrl: item.baseUrl, channel: item.channel || 0, pollInterval: 5e9, requestTimeout: 2e9, retries: 1, safeOn: false, powerReturnPolicy: 'off', equipmentKind: 'outlet', maximumOn: 0, requiredProbeIds: []});
   } else {
     const endpointID = uuid();
@@ -363,7 +363,7 @@ function mapDiscovery(item) {
   }
   renderInventory();
   markChanged();
-  notify('Device mapped but still disabled. Complete safety commissioning before activation.');
+  notify('Device added. Save setup to use supported local adapters through AquaOS safety policy.');
   showView('inventory');
 }
 
@@ -379,6 +379,23 @@ function supportedSensor(entity) {
   return null;
 }
 
+function presetAlarmFor(entity, sensorID) {
+  const deviceClass = String(entity.deviceClass || '').toLowerCase();
+  if (!entity.entityId.startsWith('binary_sensor.') || !['moisture', 'problem', 'safety'].includes(deviceClass)) return null;
+  return {
+    id: shortID(`${sensorID}-alarm`, 'device-alarm'),
+    name: `${entity.name || entity.entityId} alarm`,
+    sensorId: sensorID,
+    condition: 'true',
+    threshold: 1,
+    severity: deviceClass === 'problem' ? 'critical' : 'warning',
+    delay: 0,
+    clearDelay: 30e9,
+    latching: deviceClass === 'problem',
+    notifications: ['home-assistant', 'log']
+  };
+}
+
 function importHomeAssistantDevice(device) {
   const inventory = editable.configuration.inventory;
   if (inventory.devices.some(item => item.metadata?.homeAssistantDeviceId === device.id)) throw new Error('This Home Assistant device is already imported.');
@@ -390,11 +407,13 @@ function importHomeAssistantDevice(device) {
     const entityKey = shortID(entity.name || entity.entityId, 'entity');
     if (sensor && !inventory.sensors.some(item => item.id === entityKey)) {
       inventory.sensors.push({id: entityKey, entityId: uuid(), deviceId: deviceID, name: entity.name || entity.entityId, quantity: sensor.quantity, unit: sensor.unit, calibration: {enabled: false, scale: 1, offset: 0}});
+      const alarm = presetAlarmFor(entity, entityKey);
+      if (alarm && !editable.configuration.alarms.rules.some(rule => rule.id === alarm.id || rule.sensorId === alarm.sensorId)) editable.configuration.alarms.rules.push(alarm);
       return;
     }
     if (entity.entityId.startsWith('switch.') && !inventory.equipment.some(item => item.id === entityKey)) {
       const equipmentEntityID = uuid();
-      inventory.equipment.push({id: entityKey, entityId: equipmentEntityID, deviceId: deviceID, name: entity.name || entity.entityId, kind: 'outlet', capabilities: ['switch', 'reported-state'], hazardous: false, failSafeOn: false, maximumOn: 0, maximumDailyOn: 0, minimumOff: 0, commissioning: {stage: 'discovered'}});
+      inventory.equipment.push({id: entityKey, entityId: equipmentEntityID, deviceId: deviceID, name: entity.name || entity.entityId, kind: 'outlet', capabilities: ['switch', 'reported-state'], hazardous: false, failSafeOn: false, maximumOn: 0, maximumDailyOn: 0, minimumOff: 0});
       if (String(device.manufacturer || '').toLowerCase().includes('shelly') && /^http:\/\/[^/?#]+\/?$/i.test(device.configurationUrl || '')) {
         editable.configuration.adapters.shelly.endpoints.push({id: uuid(), equipmentId: equipmentEntityID, alarmRuleId: uuid(), baseUrl: device.configurationUrl.replace(/\/$/, ''), channel: 0, pollInterval: 5e9, requestTimeout: 2e9, retries: 1, safeOn: false, powerReturnPolicy: 'off', equipmentKind: 'outlet', maximumOn: 0, requiredProbeIds: []});
       }
@@ -404,7 +423,7 @@ function importHomeAssistantDevice(device) {
   renderAlarms();
   renderHomeAssistantDevices();
   markChanged();
-  notify('Imported from Home Assistant. Shelly electrical protections are monitored automatically after commissioning; outputs remain off until then.');
+  notify('Imported from Home Assistant. Preset problem sensors become AquaOS alarm rules, and supported local outlets are available after saving.');
 }
 
 function renderHomeAssistantDevices() {
@@ -438,7 +457,7 @@ byId('loadHADevices').addEventListener('click', async () => {
 byId('deviceForm').addEventListener('submit', event => { event.preventDefault(); try { const name = byId('deviceId').value.trim(); addInventory('devices', {id: shortID(name, 'device'), name}); event.target.reset(); } catch (error) { notify(error.message); } });
 byId('sensorForm').addEventListener('submit', event => { event.preventDefault(); try { const calibrated = byId('calibrationEnabled').checked; const name = byId('sensorName').value.trim(); addInventory('sensors', {id: byId('sensorId').value || shortID(name, 'sensor'), entityId: uuid(), name, deviceId: byId('sensorDevice').value, quantity: byId('sensorUnit').value === 'boolean' ? 'boolean' : 'measurement', unit: byId('sensorUnit').value, calibration: {enabled: calibrated, scale: Number(byId('calibrationScale').value), offset: Number(byId('calibrationOffset').value), reference: calibrated ? byId('calibrationReference').value.trim() : '', calibratedBy: calibrated ? 'admin-gui-operator' : '', calibratedAt: calibrated ? new Date().toISOString() : '0001-01-01T00:00:00Z'}}); event.target.reset(); renderAlarms(); } catch (error) { notify(error.message); } });
 byId('equipmentName').addEventListener('input', () => { if (!editingEquipmentID) byId('equipmentId').value = shortID(byId('equipmentName').value, 'equipment'); });
-byId('equipmentForm').addEventListener('submit', event => { event.preventDefault(); try { const kind = byId('equipmentKind').value; const hazardous = ['heater', 'ato', 'dosing-pump'].includes(kind); const requiredSensorIds = byId('requiredSensors').value.split(',').map(value => value.trim()).filter(Boolean); const existing = editingEquipmentID ? editable.configuration.inventory.equipment.find(value => value.id === editingEquipmentID) : null; const value = {id: byId('equipmentId').value.trim(), entityId: existing?.entityId || uuid(), name: byId('equipmentName').value.trim(), deviceId: byId('equipmentDevice').value, kind, capabilities: ['switch', 'command-acknowledgement', 'reported-state'], hazardous, failSafeOn: false, maximumOn: duration(byId('maximumOn').value, !hazardous), maximumDailyOn: duration(byId('maximumDaily').value, kind !== 'dosing-pump'), minimumOff: duration(byId('minimumOff').value), requiredSensorIds, commissioning: existing?.commissioning || {stage: 'uncommissioned'}}; if (existing) { const index = editable.configuration.inventory.equipment.indexOf(existing); editable.configuration.inventory.equipment[index] = value; const endpoint = editable.configuration.adapters.shelly.endpoints.find(item => item.equipmentId === value.entityId); if (endpoint) { endpoint.equipmentKind = kind === 'heater' ? 'heater' : 'outlet'; endpoint.maximumOn = value.maximumOn; endpoint.requiredProbeIds = requiredSensorIds.map(sensorID => editable.configuration.inventory.sensors.find(sensor => sensor.id === sensorID)?.entityId).filter(Boolean); } editingEquipmentID = ''; event.submitter.textContent = 'Add equipment'; renderInventory(); markChanged(); } else { addInventory('equipment', value); } event.target.reset(); } catch (error) { notify(error.message); } });
+byId('equipmentForm').addEventListener('submit', event => { event.preventDefault(); try { const kind = byId('equipmentKind').value; const hazardous = ['heater', 'ato', 'dosing-pump'].includes(kind); const requiredSensorIds = byId('requiredSensors').value.split(',').map(value => value.trim()).filter(Boolean); const existing = editingEquipmentID ? editable.configuration.inventory.equipment.find(value => value.id === editingEquipmentID) : null; const value = {id: byId('equipmentId').value.trim(), entityId: existing?.entityId || uuid(), name: byId('equipmentName').value.trim(), deviceId: byId('equipmentDevice').value, kind, capabilities: ['switch', 'command-acknowledgement', 'reported-state'], hazardous, failSafeOn: false, maximumOn: duration(byId('maximumOn').value, !hazardous), maximumDailyOn: duration(byId('maximumDaily').value, kind !== 'dosing-pump'), minimumOff: duration(byId('minimumOff').value), requiredSensorIds}; if (existing) { const index = editable.configuration.inventory.equipment.indexOf(existing); editable.configuration.inventory.equipment[index] = value; const endpoint = editable.configuration.adapters.shelly.endpoints.find(item => item.equipmentId === value.entityId); if (endpoint) { endpoint.equipmentKind = kind === 'heater' ? 'heater' : 'outlet'; endpoint.maximumOn = value.maximumOn; endpoint.requiredProbeIds = requiredSensorIds.map(sensorID => editable.configuration.inventory.sensors.find(sensor => sensor.id === sensorID)?.entityId).filter(Boolean); } editingEquipmentID = ''; event.submitter.textContent = 'Add equipment'; renderInventory(); markChanged(); } else { addInventory('equipment', value); } event.target.reset(); } catch (error) { notify(error.message); } });
 byId('checkInventory').addEventListener('click', async () => { try { await saveConfiguration(); notify('Equipment and sensors saved.'); } catch (error) { notify(error.message); } });
 
 byId('alarmName').addEventListener('input', () => { if (!editingAlarmID) byId('alarmId').value = shortID(`${byId('alarmName').value} alarm`, 'alarm'); });
@@ -516,17 +535,6 @@ document.addEventListener('click', event => {
     byId('editCalibrationReference').value = sensor.calibration?.reference || '';
     byId('calibrationDialog').showModal(); return;
   }
-  const commissionID = event.target.dataset.commission;
-  if (commissionID) {
-    const equipment = editable.configuration.inventory.equipment.find(value => value.id === commissionID);
-    if (equipment.commissioning?.stage === 'bench-tested') {
-      if (window.confirm('Authorize this bench-tested equipment for aquarium control?')) { equipment.commissioning.stage = 'commissioned'; renderInventory(); markChanged(); }
-      return;
-    }
-    byId('commissionId').value = commissionID;
-    byId('independentSafeguard').checked = !equipment.hazardous;
-    byId('commissionDialog').showModal(); return;
-  }
   const removeID = event.target.dataset.removeId;
   if (!removeID) return;
   const kind = event.target.dataset.removeKind;
@@ -546,15 +554,6 @@ byId('calibrationForm').addEventListener('submit', event => {
   byId('calibrationDialog').close(); renderInventory(); markChanged(); notify('Calibration recorded. Validate the configuration before applying it.');
 });
 
-byId('commissionForm').addEventListener('submit', event => {
-  if (event.submitter?.value === 'cancel') return;
-  event.preventDefault();
-  const equipment = editable.configuration.inventory.equipment.find(value => value.id === byId('commissionId').value);
-  if (!byId('safeLoad').checked || !byId('failSafeVerified').checked || !byId('powerReturnVerified').checked || (equipment.hazardous && !byId('independentSafeguard').checked)) { notify('Every required physical safety check must be completed.'); return; }
-  equipment.commissioning = {stage: 'bench-tested', safeTestLoad: true, failSafeStateVerified: true, powerReturnVerified: true, independentSafeguardPresent: byId('independentSafeguard').checked, verifiedBy: byId('commissionOperator').value.trim(), verifiedAt: new Date().toISOString()};
-  byId('commissionDialog').close(); renderInventory(); markChanged(); notify('Bench evidence recorded. Apply it, then explicitly commission the equipment.');
-});
-
 byId('saveBackup').addEventListener('click', async () => {
   try {
     editable.configuration.backups = {enabled: byId('backupEnabled').checked, destination: byId('backupDestination').value.trim(), retentionDays: Number(byId('backupRetention').value)};
@@ -566,16 +565,16 @@ byId('saveBackup').addEventListener('click', async () => {
 
 async function validateCandidate() {
   if (!editable) throw new Error('Connect to AquaOS first.');
-  if (byId('activateHardware').checked) {
+  {
     const config = editable.configuration;
-    const equipmentByEntity = new Map(config.inventory.equipment.map(item => [item.entityId, item]));
-    const uncommissioned = config.adapters.shelly.endpoints.filter(endpoint => equipmentByEntity.get(endpoint.equipmentId)?.commissioning?.stage !== 'commissioned');
-    if (uncommissioned.length) throw new Error('Every mapped Shelly outlet must be commissioned before hardware activation.');
-    config.simulator.enabled = false;
-    config.bench.enabled = true;
-    config.bench.safeLoadAcknowledged = true;
-    config.adapters.shelly.enabled = config.adapters.shelly.endpoints.length > 0;
-    config.adapters.esp32.enabled = config.adapters.esp32.endpoints.length > 0;
+    const hasSupportedAdapters = config.adapters.shelly.endpoints.length > 0 || config.adapters.esp32.endpoints.length > 0;
+    if (hasSupportedAdapters) {
+      config.simulator.enabled = false;
+      config.bench.enabled = true;
+      config.bench.safeLoadAcknowledged = true;
+      config.adapters.shelly.enabled = config.adapters.shelly.endpoints.length > 0;
+      config.adapters.esp32.enabled = config.adapters.esp32.endpoints.length > 0;
+    }
   }
   const response = await call('/api/config/editable/validate', {method: 'POST', body: JSON.stringify(editable)});
   const validation = await response.json();

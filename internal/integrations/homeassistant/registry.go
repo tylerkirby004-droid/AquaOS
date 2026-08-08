@@ -13,7 +13,8 @@ import (
 )
 
 // RegistryDevice is a physical or logical device already known to Home
-// Assistant. Importing it into AquaOS does not commission or activate it.
+// Assistant. Importing is read-only against Home Assistant; supported AquaOS
+// adapters are configured separately through validated AquaOS configuration.
 type RegistryDevice struct {
 	ID               string           `json:"id"`
 	Name             string           `json:"name"`

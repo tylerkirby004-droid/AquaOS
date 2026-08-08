@@ -169,6 +169,28 @@ func TestEmbeddedAdminUIAcceptsAndClearsFirstBootHandoff(t *testing.T) {
 	}
 }
 
+func TestEmbeddedAdminUIUsesDeviceAdoptionWithoutCommissioning(t *testing.T) {
+	script, err := assets.ReadFile("web/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	html, err := assets.ReadFile("web/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	contents := string(script) + string(html)
+	for _, obsolete := range []string{"commissionDialog", "commissionForm", "data-commission", "activateHardware", "Complete safety commissioning"} {
+		if strings.Contains(contents, obsolete) {
+			t.Fatalf("Admin UI still contains commissioning workflow hook %q", obsolete)
+		}
+	}
+	for _, required := range []string{"presetAlarmFor", "hasSupportedAdapters", "Supported local adapters are enabled when you save"} {
+		if !strings.Contains(contents, required) {
+			t.Fatalf("Admin UI does not contain device-adoption behavior %q", required)
+		}
+	}
+}
+
 func TestAdminPairingCreatesPersistentProtectedSession(t *testing.T) {
 	server := newTestServer(t, &fakeOperations{})
 	pair := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/session", nil)

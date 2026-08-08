@@ -28,7 +28,7 @@
         <h1>Let’s set up your aquarium</h1>
         <p class="lede">This assistant uses plain-language choices and checks every change before AquaOS accepts it. Nothing on this page directly switches physical equipment.</p>
         <div id="serviceLinks" class="card"><strong>Detected AquaOS pages</strong><p class="empty">Pages appear automatically after AquaOS connects.</p></div>
-        <div class="card warning"><strong>Before continuing</strong><p>Keep heaters, dosing pumps, and top-off equipment disconnected or connected only to a safe test load until the commissioning checks pass.</p></div>
+        <div class="card warning"><strong>Before continuing</strong><p>Add only aquarium equipment you intend AquaOS to manage. Core still enforces fail-safe states, run limits, sensor interlocks, and independent safeguards.</p></div>
         <div id="pairing"><label for="token">Recovery pairing code</label>
         <div class="inline"><input id="token" type="password" autocomplete="current-password" placeholder="Only needed when pairing a new browser"><button id="connect" class="primary">Pair browser</button></div>
         <p class="help">The installation browser pairs automatically. This recovery field is only used to authorize a different browser.</p></div>
@@ -60,7 +60,7 @@
 
       <section id="inventory" class="view">
         <p class="eyebrow">Step 5</p><h1>Your equipment and sensors</h1>
-        <p>Review what AquaOS imported. Outputs stay off until their commissioning checks are completed.</p>
+        <p>Review what AquaOS imported. Supported local adapters are enabled when you save, and every command still passes through AquaOS safety policy.</p>
         <div class="split">
           <form id="deviceForm" class="card"><h2>Add a device manually</h2><label>Device name<input id="deviceId" required placeholder="Fish room controller"></label><button>Add device</button></form>
           <form id="sensorForm" class="card"><h2>Add a sensor</h2><input id="sensorId" type="hidden"><label>What should we call it?<input id="sensorName" required placeholder="Display tank temperature"></label><label>Which device provides it?<select id="sensorDevice"></select></label><label>What does it measure?<select id="sensorUnit"><option value="celsius">Temperature — °C</option><option value="fahrenheit">Temperature — °F</option><option value="pH">pH</option><option value="ppt">Salinity — ppt</option><option value="liters_per_hour">Flow — L/h</option><option value="boolean">On/off or leak</option></select></label><details><summary>Calibration (optional)</summary><label class="switch"><input id="calibrationEnabled" type="checkbox"><span>Apply calibration</span></label><label>Scale<input id="calibrationScale" type="number" step="any" value="1"></label><label>Offset<input id="calibrationOffset" type="number" step="any" value="0"></label><label>Reference used<input id="calibrationReference" placeholder="Reference thermometer"></label></details><button>Add sensor</button></form>
@@ -84,11 +84,10 @@
         <input id="backupEnabled" type="hidden"><input id="backupDestination" type="hidden"><input id="backupRetention" type="hidden" value="30"><button id="saveBackup" hidden></button>
         <pre id="result" hidden></pre>
       </section>
-      <textarea id="candidate" hidden></textarea><input id="activateHardware" type="hidden"><input id="understand" type="hidden"><button id="validate" hidden></button><button id="apply" hidden></button>
+      <textarea id="candidate" hidden></textarea><input id="understand" type="hidden"><button id="validate" hidden></button><button id="apply" hidden></button>
       <div id="notice" role="status" aria-live="polite"></div>
     </main>
   </div>
-  <dialog id="commissionDialog"><form id="commissionForm" method="dialog"><h2>Safe equipment commissioning</h2><p>This records physical checks. Use a lamp or other safe test load—not aquarium equipment.</p><input id="commissionId" type="hidden"><label class="confirm"><input id="safeLoad" type="checkbox"> A safe test load was used.</label><label class="confirm"><input id="failSafeVerified" type="checkbox"> I verified the output goes to its configured safe state.</label><label class="confirm"><input id="powerReturnVerified" type="checkbox"> I removed and restored power and verified safe behavior.</label><label class="confirm"><input id="independentSafeguard" type="checkbox"> An independent physical safeguard is installed.</label><label>Operator name<input id="commissionOperator" required></label><div class="actions"><button value="cancel">Cancel</button><button id="completeCommission" value="default" class="danger">Record bench test</button></div></form></dialog>
   <dialog id="calibrationDialog"><form id="calibrationForm" method="dialog"><h2>Calibrate sensor</h2><p>Use a known reference appropriate for this sensor. AquaOS records who performed the calibration and when.</p><input id="calibrationId" type="hidden"><label>Scale<input id="editCalibrationScale" type="number" step="any" value="1" required></label><label>Offset<input id="editCalibrationOffset" type="number" step="any" value="0" required></label><label>Reference used<input id="editCalibrationReference" required></label><label>Operator name<input id="calibrationOperator" required></label><div class="actions"><button value="cancel">Cancel</button><button id="completeCalibration" value="default" class="primary">Save calibration</button></div></form></dialog>
   <script src="app.js"></script>
 </body>

@@ -329,16 +329,8 @@ func (s *Service) ApplyConfiguration(ctx context.Context, actor Actor, payload [
 	if bytes.Equal(current, payload) {
 		return result, nil
 	}
-	currentConfiguration, err := config.DecodeCandidate(current)
-	if err != nil {
+	if _, err := config.DecodeCandidate(current); err != nil {
 		return ConfigurationResult{}, fmt.Errorf("installed configuration is invalid: %w", err)
-	}
-	candidateConfiguration, err := config.DecodeCandidate(payload)
-	if err != nil {
-		return ConfigurationResult{}, err
-	}
-	if err = validateCommissioningTransition(currentConfiguration, candidateConfiguration); err != nil {
-		return ConfigurationResult{}, err
 	}
 	result.Changed = true
 	if dryRun {
@@ -358,27 +350,6 @@ func (s *Service) ApplyConfiguration(ctx context.Context, actor Actor, payload [
 	}
 	s.logger.InfoContext(ctx, "AquaOS configuration activated", "actor", actor.ID, "digest", result.Digest)
 	return result, nil
-}
-
-// validateCommissioningTransition prevents a browser or direct API caller from
-// changing an output from untested to commissioned in one configuration write.
-// Bench evidence is validated by config; this check requires it to have been
-// persisted in the previously active configuration before final activation.
-func validateCommissioningTransition(current, candidate config.Config) error {
-	priorStages := make(map[string]string, len(current.Inventory.Equipment))
-	for _, equipment := range current.Inventory.Equipment {
-		priorStages[equipment.ID] = equipment.Commissioning.Stage
-	}
-	for _, equipment := range candidate.Inventory.Equipment {
-		if equipment.Commissioning.Stage != "commissioned" {
-			continue
-		}
-		prior := priorStages[equipment.ID]
-		if prior != "bench-tested" && prior != "commissioned" {
-			return fmt.Errorf("equipment %q must persist bench-tested evidence before commissioning", equipment.ID)
-		}
-	}
-	return nil
 }
 
 // Upgrade verifies signature/checksum and rolls back if restart verification fails.

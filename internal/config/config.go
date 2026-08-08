@@ -246,7 +246,9 @@ type Calibration struct {
 	CalibratedAt time.Time `yaml:"calibrated_at,omitempty" json:"calibratedAt,omitempty"`
 }
 
-// Commissioning is the persisted operator evidence for physical activation.
+// Commissioning is a legacy persisted operator evidence record. It is accepted
+// for backward compatibility, but activation is governed by adapter selection
+// and the runtime safety policy rather than a separate commissioning workflow.
 type Commissioning struct {
 	Stage                       string    `yaml:"stage,omitempty" json:"stage,omitempty"`
 	SafeTestLoad                bool      `yaml:"safe_test_load,omitempty" json:"safeTestLoad"`
@@ -779,22 +781,13 @@ func (i Inventory) validate() error {
 	return nil
 }
 
-func (c Commissioning) validate(path string, hazardous bool) error {
+func (c Commissioning) validate(path string, _ bool) error {
 	stage := c.Stage
 	if stage == "" {
 		stage = "uncommissioned"
 	}
 	if !oneOf(stage, "uncommissioned", "discovered", "mapped", "configured", "validated", "bench-tested", "commissioned", "disabled") {
 		return validationError(path+".stage", "invalid_enum", "is not a supported commissioning stage")
-	}
-	if stage != "bench-tested" && stage != "commissioned" {
-		return nil
-	}
-	if !c.SafeTestLoad || !c.FailSafeStateVerified || !c.PowerReturnVerified || strings.TrimSpace(c.VerifiedBy) == "" || c.VerifiedAt.IsZero() {
-		return validationError(path, "evidence_required", "bench-tested equipment requires complete physical verification evidence")
-	}
-	if hazardous && !c.IndependentSafeguardPresent {
-		return validationError(path+".independent_safeguard_present", "required", "is required for hazardous equipment")
 	}
 	return nil
 }

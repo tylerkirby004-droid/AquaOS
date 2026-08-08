@@ -5,7 +5,7 @@ description: Automatically managed InfluxDB and Grafana for AquaOS long-term tre
 url: https://github.com/tylerkirby004-droid/AquaOS
 arch:
   - amd64
-image: ghcr.io/tylerkirby004-droid/aquaos-addon
+image: ghcr.io/tylerkirby004-droid/aquaos-history-addon
 startup: services
 boot: auto
 init: false
